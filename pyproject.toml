@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bsp"
+version = "0.1.0"
+description = "Reinforcement learning project using DM-Control via Gymnasium."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "dm-control",
+    "shimmy[dm-control]",
+    "gymnasium",
+    "numpy",
+    "torch",
+    "hydra-core",
+    "wandb",
+]
+
+[project.optional-dependencies]
+dev = [
+    "jupyter",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -10,31 +10,49 @@ wandb:
 
 env:
   domain: humanoid
-  task: stand
-  max_episode_steps: 1000  # also set by default in dm-control
+  tasks:
+    - stand
+    - walk
+    - run
+  max_episode_steps: 1_000  # also set by default in dm-control
 
 curiosity_pre_training:
-  training_loop:
-    num_collection_episodes: 10
-    num_training_episodes: 10
-  total_timesteps: 
-  dynamics_predictor:
-    hidden: 256
-    depth: 2
+  total_num_episodes: 1_000
+  num_collection_episodes: 1
+  dynamics_training_batches: 10
+  curiosity_training_batches: 10
+  H_max: 16
+  length_bias_k: 4.0
+  eval_interval: 100_000  # timesteps
+
+  dp_transformer:
+    model:
+      d_model: 16
+      embedder_hidden_dim: 32
+      simnorm_dim: 4
+      dim_feedforward: 64
+      num_heads: 2
+      num_layers: 2
+    training:
+      lr: 1e-4
+      batch_size: 512
     replay_buffer:
       capacity: 1_000_000
+
   curiosity_agent:
+    batch_size: 512
+    gamma: 0.99
     replay_buffer:
-      capacity: 10_000
-      batch_size: 256
+      capacity: 10_000    
     actor:
-      hidden: 256
+      hidden: 64
       depth: 2
       lr: 1e-4
     critic:
-      hidden: 256
+      hidden: 64
       depth: 2
       lr: 1e-4
+      tau: 1e-3
 
 
 task_training:
@@ -45,14 +63,3 @@ task_training:
     hidden: 256
     depth: 2
 
-  num_iterations: 100
-  total_steps: 1000000
-  batch_size: 256
-  lr: 3.0e-4
-
-train:
-  num_iterations: 100
-  total_steps: 1000000
-  batch_size: 256
-  lr: 3.0e-4
-  gamma: 0.99

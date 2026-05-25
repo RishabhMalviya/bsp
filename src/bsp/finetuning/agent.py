@@ -26,3 +26,6 @@ class Agent:
 
     def act(self, obs: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError
+    
+    def update(self, batch: dict[str, torch.Tensor]) -> dict[str, float]:
+        raise NotImplementedError

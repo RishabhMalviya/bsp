@@ -8,18 +8,19 @@ with `--config-name=<name>`.
 import hydra
 from omegaconf import DictConfig
 
-from bsp.logger import Logger
-from bsp.trainer import Trainer
+from bsp.utils import Logger, set_seed
+from bsp.common.base_classes import Trainer
 
 
 @hydra.main(version_base=None, config_path="../../configs", config_name="config")
 def main(cfg: DictConfig) -> None:
+    set_seed(cfg.seed)
+
     logger = Logger(cfg)
     trainer = Trainer(cfg, logger)
+
     try:
-        for _ in range(cfg.train.num_iterations):
-            trainer.train(cfg)
-            trainer.eval(cfg)
+        trainer.train(cfg)
     finally:
         logger.finish()
 

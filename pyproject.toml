@@ -16,12 +16,20 @@ dependencies = [
     "torch",
     "hydra-core",
     "wandb",
+    "tensordict>=0.12.4",
+    "pandas>=2.3.3",
 ]
 
 [project.optional-dependencies]
 dev = [
     "jupyter",
+    "jupyter-resource-usage>=1.2.1"
 ]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[dependency-groups]
+dev = [
+    "jupyter-resource-usage>=1.2.1",
+]

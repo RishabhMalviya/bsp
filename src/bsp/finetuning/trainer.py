@@ -1,13 +1,12 @@
 import gymnasium as gym
 from omegaconf import DictConfig
 
-from bsp.agent import Agent
-from bsp.buffer import ReplayBuffer
-from bsp.env import make_env
-from bsp.utils import set_seed
+from bsp.common.replay_buffer import ReplayBuffer
+from bsp.finetuning.agent import Agent
+from bsp.utils import make_env, set_seed
 
 
-class Trainer:
+class TaskSpecificTrainer:
 	"""Base trainer class for TD-MPC2."""
 
 	def __init__(self, cfg, logger):

@@ -1,5 +1,4 @@
 import random
-import time
 
 import gymnasium as gym
 import numpy as np
@@ -25,22 +24,26 @@ class BodySchemaTrainer(BaseTrainer):
 		self.agent_cfg = cfg.curiosity_pre_training.curiosity_agent
 		self.dpt_cfg = cfg.curiosity_pre_training.dp_transformer
 
-		# Logger
-		self.logger = logger
 
 		# Bookkeeping
+		self.logger = logger
 		self.timestep = 0
 		self.collected_episodes = 0
 		self.H_max = self.cfg.curiosity_pre_training.H_max
 		self.warmup = max(self.dpt_cfg.training.batch_size, self.agent_cfg.batch_size) + self.H_max
 
+
 		# Environments
 		self.envs = [make_env(self.cfg.env.domain, task, self.cfg.env.max_episode_timesteps, seed=self.cfg.seed) for task in self.cfg.env.pretraining_tasks]
+
 		assert all(gym.spaces.flatdim(env.observation_space) == gym.spaces.flatdim(self.envs[0].observation_space) for env in self.envs)
 		assert all(gym.spaces.flatdim(env.action_space) == gym.spaces.flatdim(self.envs[0].action_space) for env in self.envs)
+
 		obs_dim = gym.spaces.flatdim(self.envs[0].observation_space)
 		act_dim = gym.spaces.flatdim(self.envs[0].action_space)
+
 		self.eval_env = make_env(self.cfg.env.domain, self.cfg.env.downstream_task, self.cfg.env.max_episode_timesteps, seed=self.cfg.seed, render_mode="rgb_array")
+
 
 		# Trainable Components
 		self.agent = CuriosityAgent(self.agent_cfg, obs_dim, act_dim)
@@ -78,12 +81,9 @@ class BodySchemaTrainer(BaseTrainer):
 			the per-step intrinsic reward from the dynamics predictor, flatten over
 			the sequence dimension, and return as a flat-transition batch.
 		"""
-		# Cap at H_max - 1 so compute_intrinsic_reward can extend to L+1 without
-		# overflowing the dynamics transformer's positional embedding (sized H_max*2).
-		L = min(sample_seq_length(self.H_max), self.H_max - 1)
-
 		obs, actions, _, next_obs, dones = self.agent.replay_buffer.sample(
-			batch_size=self.agent_cfg.batch_size, L=L
+			batch_size=self.agent_cfg.batch_size,
+			L=min(sample_seq_length(self.H_max), self.H_max - 1)  # Becuase you have to compute intrinsic reward from s_{l+1}
 		)
 
 		intrinsic_reward = self.dynamics_predictor.compute_intrinsic_reward(obs, actions, next_obs)
@@ -111,21 +111,25 @@ class BodySchemaTrainer(BaseTrainer):
 		return obs, actions
 
 	def _collect_episodes(self, env: gym.Env) -> None:
-		obs, info = env.reset(seed=self.cfg.seed)
+		self.agent.to_cpu()  # Saves on moving tensors back and forth at every timestep
+
+		obs, _ = env.reset(seed=self.cfg.seed)
 		for _ in range(self.cfg.curiosity_pre_training.num_collections_per_loop):
 			for _ in range(self.cfg.env.max_episode_timesteps):
 				action = self.agent.act(obs).detach().cpu().numpy()
-				next_obs, reward, terminated, truncated, info = env.step(action)
+				next_obs, reward, terminated, truncated, _ = env.step(action)
 
 				self.agent.replay_buffer.add(obs, action, reward, next_obs, terminated | truncated)
 				self.dynamics_predictor.replay_buffer.add(obs, action, reward, next_obs, terminated | truncated)
 
 				obs = next_obs
-				if terminated or truncated: obs, info = env.reset()
+				if terminated or truncated: obs, _ = env.reset()
 
 				self.timestep += 1
 
 			self.collected_episodes += 1
+		
+		self.agent.to_device()
 
 	def _train_dynamics_predictor(self) -> None:
 		for _ in range(self.cfg.curiosity_pre_training.dynamics_training_iterations):
@@ -140,26 +144,21 @@ class BodySchemaTrainer(BaseTrainer):
 			self.logger.log(train_metrics, step=self.timestep)
 
 	def train(self) -> None:
-		"""Train an agent."""
-
 		while self.collected_episodes < self.cfg.curiosity_pre_training.total_num_episodes:
 			# Collect Episodes
-			collect_start = time.perf_counter()
-			self._collect_episodes(random.choice(self.envs))
-			self.logger.log({'time/collect_s': time.perf_counter() - collect_start}, step=self.timestep)
+			with self.logger.timer('time/collect_s', step=lambda: self.timestep):
+				self._collect_episodes(random.choice(self.envs))
 
 			# Skip training until replay buffers have at least one batch's worth of data
 			if self.dynamics_predictor.replay_buffer.size < self.warmup: continue
 
 			# Train DynamicsTransfomer
-			dpt_start = time.perf_counter()
-			self._train_dynamics_predictor()
-			self.logger.log({'time/dpt_train_s': time.perf_counter() - dpt_start}, step=self.timestep)
+			with self.logger.timer('time/dpt_train_s', step=lambda: self.timestep):
+				self._train_dynamics_predictor()
 
 			# Train Agent
-			agent_start = time.perf_counter()
-			self._train_agent()
-			self.logger.log({'time/agent_train_s': time.perf_counter() - agent_start}, step=self.timestep)
+			with self.logger.timer('time/agent_train_s', step=lambda: self.timestep):
+				self._train_agent()
 
 			# Eval
 			if self.collected_episodes % self.cfg.curiosity_pre_training.eval_interval == 0:

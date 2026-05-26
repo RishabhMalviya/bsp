@@ -1,6 +1,8 @@
 """Helpers: seeding, device, etc."""
 
+import contextlib
 import random
+import time
 
 import wandb
 import torch
@@ -46,6 +48,21 @@ class Logger:
 
     def log(self, metrics: dict, step: int | None = None) -> None:
         wandb.log(metrics, step=step)
+
+    @contextlib.contextmanager
+    def timer(self, key: str, step=None):
+        """Time the wrapped block and log the elapsed seconds under `key`.
+
+        `step` may be an int or a zero-arg callable; callables are resolved
+        when the block exits so the logged step reflects state changes made
+        inside the block (e.g. self.timestep incrementing during collection).
+        """
+        start = time.perf_counter()
+        try:
+            yield
+        finally:
+            resolved_step = step() if callable(step) else step
+            self.log({key: time.perf_counter() - start}, step=resolved_step) # type: ignore
 
     def finish(self) -> None:
         wandb.finish()

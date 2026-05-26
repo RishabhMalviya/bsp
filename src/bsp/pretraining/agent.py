@@ -16,12 +16,12 @@ from bsp.common.base_classes import BaseAgent
 
 device = get_device()
 
-# TODO: Try copying HW2 code here.
 
 class CuriosityAgent(BaseAgent):
     def __init__(self, cfg: DictConfig, obs_dim: int, ac_dim: int):
         # Initialize self.replay_buffer and self.cfg
         super().__init__(cfg, obs_dim, ac_dim)
+        self.device = device
 
         # Actor
         self.actor = MLP(
@@ -35,8 +35,6 @@ class CuriosityAgent(BaseAgent):
             itertools.chain([self.logstd], self.actor.parameters()),
             lr=self.cfg.actor.lr
         )
-        
-
 
         # Critic
         self.critic_local = MLP(
@@ -51,6 +49,21 @@ class CuriosityAgent(BaseAgent):
         
         self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=self.cfg.critic.lr)
 
+    def to_cpu(self):
+        self.actor.to('cpu')
+        self.critic_local.to('cpu')
+        self.critic_target.to('cpu')
+        self.logstd = nn.Parameter(self.logstd.data.to('cpu'))
+
+        self.device = 'cpu'
+
+    def to_device(self):
+        self.actor.to(device)
+        self.critic_local.to(device)
+        self.critic_target.to(device)
+        self.logstd = nn.Parameter(self.logstd.data.to(device))
+
+        self.device = device
 
     def _get_action_distribution(self, obs: torch.Tensor, temperature: float = 1.0) -> distributions.Normal:
         action_mean = torch.tanh(self.actor(obs))
@@ -64,7 +77,7 @@ class CuriosityAgent(BaseAgent):
 
     def act(self, obs: torch.Tensor | np.ndarray, deterministic: bool = False, temperature: float = 1.0) -> torch.Tensor:
         if isinstance(obs, np.ndarray):
-            obs = torch.tensor(obs, dtype=torch.float32, device=device)
+            obs = torch.tensor(obs, dtype=torch.float32, device=self.device)
         action_dist = self._get_action_distribution(obs, temperature)
 
         if deterministic:

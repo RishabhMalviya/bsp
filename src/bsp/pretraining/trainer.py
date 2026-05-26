@@ -1,3 +1,4 @@
+import random
 import time
 
 import gymnasium as gym
@@ -19,23 +20,31 @@ class BodySchemaTrainer(BaseTrainer):
 	def __init__(self, cfg: DictConfig, logger):
 		set_seed(cfg.seed)
 
+		# Configs
 		self.cfg = cfg
 		self.agent_cfg = cfg.curiosity_pre_training.curiosity_agent
 		self.dpt_cfg = cfg.curiosity_pre_training.dp_transformer
 
+		# Logger
 		self.logger = logger
-		self.timestep = 0
 
-		self.env = make_env(self.cfg)
-		self.eval_env = make_env(self.cfg, render_mode="rgb_array")
-		obs_dim = gym.spaces.flatdim(self.env.observation_space)
-		act_dim = gym.spaces.flatdim(self.env.action_space)
+		# Bookkeeping
+		self.timestep = 0
+		self.collected_episodes = 0
 		self.H_max = self.cfg.curiosity_pre_training.H_max
 		self.warmup = max(self.dpt_cfg.training.batch_size, self.agent_cfg.batch_size) + self.H_max
 
+		# Environments
+		self.envs = [make_env(self.cfg.env.domain, task, self.cfg.env.max_episode_timesteps, seed=self.cfg.seed) for task in self.cfg.env.pretraining_tasks]
+		assert all(gym.spaces.flatdim(env.observation_space) == gym.spaces.flatdim(self.envs[0].observation_space) for env in self.envs)
+		assert all(gym.spaces.flatdim(env.action_space) == gym.spaces.flatdim(self.envs[0].action_space) for env in self.envs)
+		obs_dim = gym.spaces.flatdim(self.envs[0].observation_space)
+		act_dim = gym.spaces.flatdim(self.envs[0].action_space)
+		self.eval_env = make_env(self.cfg.env.domain, self.cfg.env.downstream_task, self.cfg.env.max_episode_timesteps, seed=self.cfg.seed, render_mode="rgb_array")
+
+		# Trainable Components
 		self.agent = CuriosityAgent(self.agent_cfg, obs_dim, act_dim)
 		self.dynamics_predictor = DynamicsPredictor(self.dpt_cfg, obs_dim, act_dim, H_max=self.H_max)
-
 
 	def _eval(self) -> None:
 		"""
@@ -63,7 +72,6 @@ class BodySchemaTrainer(BaseTrainer):
 			step=self.timestep,
 		)
 
-
 	def _prep_agent_training_batch(self):
 		"""
 			Sample a length-L sequence batch from the agent's replay buffer, compute
@@ -88,7 +96,6 @@ class BodySchemaTrainer(BaseTrainer):
 			dones.flatten(0, 1),
 		)
 
-
 	def _prep_dynamics_predictor_training_batch(self):
 		"""
 			Sample a length-L sequence batch from the dynamics predictor's replay
@@ -103,19 +110,22 @@ class BodySchemaTrainer(BaseTrainer):
 
 		return obs, actions
 
-	def _collect_episodes(self) -> None:
-		obs, info = self.env.reset(seed=self.cfg.seed)
+	def _collect_episodes(self, env: gym.Env) -> None:
+		obs, info = env.reset(seed=self.cfg.seed)
 		for _ in range(self.cfg.curiosity_pre_training.num_collection_episodes):
-			action = self.agent.act(obs).detach().cpu().numpy()
-			next_obs, reward, terminated, truncated, info = self.env.step(action)
+			for _ in range(self.cfg.env.max_episode_timesteps):
+				action = self.agent.act(obs).detach().cpu().numpy()
+				next_obs, reward, terminated, truncated, info = env.step(action)
 
-			self.agent.replay_buffer.add(obs, action, reward, next_obs, terminated | truncated)
-			self.dynamics_predictor.replay_buffer.add(obs, action, reward, next_obs, terminated | truncated)
+				self.agent.replay_buffer.add(obs, action, reward, next_obs, terminated | truncated)
+				self.dynamics_predictor.replay_buffer.add(obs, action, reward, next_obs, terminated | truncated)
 
-			obs = next_obs
-			if terminated or truncated: obs, info = self.env.reset()
+				obs = next_obs
+				if terminated or truncated: obs, info = env.reset()
 
-			self.timestep += 1
+				self.timestep += 1
+
+			self.collected_episodes += 1
 
 	def _train_dynamics_predictor(self) -> None:
 		for _ in range(self.cfg.curiosity_pre_training.dynamics_training_iterations):
@@ -132,10 +142,10 @@ class BodySchemaTrainer(BaseTrainer):
 	def train(self) -> None:
 		"""Train an agent."""
 
-		for _ in range(self.cfg.curiosity_pre_training.total_num_episodes):
+		while self.collected_episodes < self.cfg.curiosity_pre_training.total_num_episodes:
 			# Collect Episodes
 			collect_start = time.perf_counter()
-			self._collect_episodes()
+			self._collect_episodes(random.choice(self.envs))
 			self.logger.log({'time/collect_s': time.perf_counter() - collect_start}, step=self.timestep)
 
 			# Skip training until replay buffers have at least one batch's worth of data

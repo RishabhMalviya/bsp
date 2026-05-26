@@ -25,7 +25,7 @@ class CuriosityAgent(BaseAgent):
 
         # Actor
         self.actor = MLP(
-            in_dim=obs_dim, out_dim=ac_dim, hidden=self.cfg.actor.hidden, depth=self.cfg.actor.depth
+            in_dim=obs_dim, out_dim=ac_dim, final_activation=nn.Tanh(), hidden=self.cfg.actor.hidden, depth=self.cfg.actor.depth
         ).to(device)
 
         self.logstd = nn.Parameter(torch.zeros(ac_dim, dtype=torch.float32, device=device))
@@ -66,7 +66,7 @@ class CuriosityAgent(BaseAgent):
         self.device = device
 
     def _get_action_distribution(self, obs: torch.Tensor, temperature: float = 1.0) -> distributions.Normal:
-        action_mean = torch.tanh(self.actor(obs))
+        action_mean = self.actor(obs)
 
         action_logstd = self.logstd.expand_as(action_mean)
         clipped_logstd = torch.clamp(action_logstd, min=math.log(1e-5), max=math.log(2.0))

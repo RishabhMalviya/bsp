@@ -26,7 +26,7 @@ class BaseTrainer:
 		self.cfg = cfg
 		self.logger = logger
 
-		self.env = make_env(cfg)
+		self.env = make_env(cfg.env.domain, cfg.env.downstream_task, cfg.env.max_episode_timesteps, seed=cfg.seed)
 		obs_dim = gym.spaces.flatdim(self.env.observation_space)
 		act_dim = gym.spaces.flatdim(self.env.action_space)
             

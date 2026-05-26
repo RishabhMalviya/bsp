@@ -9,6 +9,7 @@ from omegaconf import DictConfig
 from bsp.common.base_classes import BaseTrainer
 from bsp.pretraining.agent import CuriosityAgent
 from bsp.pretraining.dynamics_predictor import DynamicsPredictor
+from bsp.pretraining.utils import LinearSchedule
 from bsp.utils import make_env, sample_seq_length, set_seed
 
 
@@ -27,10 +28,23 @@ class BodySchemaTrainer(BaseTrainer):
 
 		# Bookkeeping
 		self.logger = logger
+
 		self.timestep = 0
 		self.collected_episodes = 0
+		
 		self.H_max = self.cfg.curiosity_pre_training.H_max
 		self.warmup = max(self.dpt_cfg.training.batch_size, self.agent_cfg.batch_size) + self.H_max
+
+		self.temperature_schedule = LinearSchedule(
+			initial=2.0,
+			final=1.0,
+			ramp_steps=cfg.curiosity_pre_training.total_num_episodes
+		)
+		self.episode_length_schedule = LinearSchedule(
+			initial=100,
+			final=cfg.env.max_episode_timesteps,
+			ramp_steps=cfg.curiosity_pre_training.total_num_episodes // 4
+		)
 
 
 		# Environments
@@ -111,24 +125,35 @@ class BodySchemaTrainer(BaseTrainer):
 		return obs, actions
 
 	def _collect_episodes(self, env: gym.Env) -> None:
-		self.agent.to_cpu()  # Saves on moving tensors back and forth at every timestep
+		self.agent.to_cpu()  # Since the gym runs on CPU, keep the agent there during collection to avoid GPU-CPU data transfer overhead; train on GPU after collection finishes
 
 		obs, _ = env.reset(seed=self.cfg.seed)
 		for _ in range(self.cfg.curiosity_pre_training.num_collections_per_loop):
-			for _ in range(self.cfg.env.max_episode_timesteps):
-				action = self.agent.act(obs).detach().cpu().numpy()
+			for _ in range(int(self.episode_length_schedule.value)):
+				action = self.agent.act(obs, temperature=self.temperature_schedule.value).detach().cpu().numpy()
 				next_obs, reward, terminated, truncated, _ = env.step(action)
 
 				self.agent.replay_buffer.add(obs, action, reward, next_obs, terminated | truncated)
 				self.dynamics_predictor.replay_buffer.add(obs, action, reward, next_obs, terminated | truncated)
 
 				obs = next_obs
-				if terminated or truncated: obs, _ = env.reset()
+				if terminated or truncated:
+					obs, _ = env.reset()
+					break
 
 				self.timestep += 1
 
 			self.collected_episodes += 1
-			self.logger.log({'Collected Episodes': self.collected_episodes}, step=self.timestep)
+			self.temperature_schedule.step()
+			self.episode_length_schedule.step()
+			self.logger.log(
+				{
+					'Collected Episodes': self.collected_episodes,
+					'temperature': self.temperature_schedule.value,
+					'episode_length': self.episode_length_schedule.value,
+				},
+				step=self.timestep,
+			)
 
 		self.agent.to_device()
 

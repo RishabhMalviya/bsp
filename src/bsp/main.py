@@ -9,7 +9,7 @@ import hydra
 from omegaconf import DictConfig
 
 from bsp.utils import Logger, set_seed
-from bsp.common.base_classes import Trainer
+from bsp.pretraining.trainer import BodySchemaTrainer
 
 
 @hydra.main(version_base=None, config_path="../../configs", config_name="config")
@@ -17,7 +17,7 @@ def main(cfg: DictConfig) -> None:
     set_seed(cfg.seed)
 
     logger = Logger(cfg)
-    trainer = Trainer(cfg, logger)
+    trainer = BodySchemaTrainer(cfg, logger)
 
     try:
         trainer.train(cfg)

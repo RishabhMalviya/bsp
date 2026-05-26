@@ -2,11 +2,12 @@
 
 import random
 
-import gymnasium as gym
-import numpy as np
-from omegaconf import DictConfig, OmegaConf
-import torch
 import wandb
+import torch
+import numpy as np
+import gymnasium as gym
+from omegaconf import DictConfig, OmegaConf
+from shimmy.registration import DM_CONTROL_SUITE_ENVS
 
 
 def set_seed(seed: int) -> None:
@@ -50,11 +51,12 @@ class Logger:
         wandb.finish()
 
 
-def make_env(cfg: DictConfig) -> gym.Env:
+def make_env(cfg: DictConfig, render_mode: str | None = None) -> gym.Env:
     """DM-Control environment construction via Shimmy + Gymnasium."""
 
-    env = gym.make(f"dm_control/{cfg.env.domain}-{cfg.env.task}-v0")
+    env = gym.make(f"dm_control/{cfg.env.domain}-{cfg.env.task}-v0", render_mode=render_mode)
     env = gym.wrappers.FlattenObservation(env)
+    env = gym.wrappers.TimeLimit(env, max_episode_steps=cfg.env.max_episode_timesteps)
     env.reset(seed=cfg.seed)
     env.action_space.seed(cfg.seed)
     return env

@@ -8,9 +8,9 @@ from bsp.common.replay_buffer import ReplayBuffer
 
 
 class BaseAgent:
-    def __init__(self, cfg: DictConfig, obs_dim: int, act_dim: int):
+    def __init__(self, cfg: DictConfig,obs_dim: int, act_dim: int):
         self.cfg = cfg
-        self.replay_buffer = ReplayBuffer(cfg, obs_dim, act_dim)
+        self.replay_buffer = ReplayBuffer(obs_dim, act_dim, cfg.replay_buffer.capacity)
 
     def act(self, obs: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError

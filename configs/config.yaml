@@ -19,12 +19,12 @@ env:
 
 curiosity_pre_training:
   total_num_episodes: 1_000
-  num_collection_episodes: 1
+  num_collections_per_loop: 1
   dynamics_training_iterations: 10
   curiosity_training_iterations: 10
   H_max: 16
   length_bias_k: 4.0
-  eval_interval: 100
+  eval_interval: 100  # episodes
 
   dp_transformer:
     model:

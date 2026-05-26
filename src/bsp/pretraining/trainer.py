@@ -112,7 +112,7 @@ class BodySchemaTrainer(BaseTrainer):
 
 	def _collect_episodes(self, env: gym.Env) -> None:
 		obs, info = env.reset(seed=self.cfg.seed)
-		for _ in range(self.cfg.curiosity_pre_training.num_collection_episodes):
+		for _ in range(self.cfg.curiosity_pre_training.num_collections_per_loop):
 			for _ in range(self.cfg.env.max_episode_timesteps):
 				action = self.agent.act(obs).detach().cpu().numpy()
 				next_obs, reward, terminated, truncated, info = env.step(action)
@@ -162,5 +162,5 @@ class BodySchemaTrainer(BaseTrainer):
 			self.logger.log({'time/agent_train_s': time.perf_counter() - agent_start}, step=self.timestep)
 
 			# Eval
-			if self.timestep % self.cfg.curiosity_pre_training.eval_interval == 0:
+			if self.collected_episodes % self.cfg.curiosity_pre_training.eval_interval == 0:
 				self._eval()

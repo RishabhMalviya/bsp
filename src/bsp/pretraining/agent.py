@@ -28,8 +28,7 @@ class CuriosityAgent(BaseAgent):
             in_dim=obs_dim, out_dim=ac_dim, final_activation=nn.Tanh(), hidden=self.cfg.actor.hidden, depth=self.cfg.actor.depth
         ).to(device)
 
-        self.logstd = nn.Parameter(torch.zeros(ac_dim, dtype=torch.float32, device=device))
-        nn.init.normal_(self.logstd, std=0.02)
+        self.logstd = nn.Parameter(torch.ones(ac_dim, dtype=torch.float32, device=device)*math.log(0.5))  # High initial exploration noise, annealed by temperature in act()
 
         self.actor_optimizer = optim.Adam(
             itertools.chain([self.logstd], self.actor.parameters()),

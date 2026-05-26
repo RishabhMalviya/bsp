@@ -18,6 +18,7 @@ env/
 # IDE
 .vscode/
 .idea/
+.claude/
 *.swp
 
 # OS
@@ -28,6 +29,12 @@ runs/
 logs/
 checkpoints/
 wandb/
+outputs/
 *.pt
 *.ckpt
 *.mp4
+
+# Data artifacts
+data/*
+!data/*.sh
+!data/*.ipynb

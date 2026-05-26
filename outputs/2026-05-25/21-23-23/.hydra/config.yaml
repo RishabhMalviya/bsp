@@ -1,0 +1,54 @@
+seed: 0
+log_dir: runs
+wandb:
+  project: bsp
+  entity: null
+  name: null
+  group: null
+  mode: disabled
+env:
+  domain: humanoid
+  task: stand
+  max_episode_timesteps: 1000
+curiosity_pre_training:
+  total_num_episodes: 30
+  num_collection_episodes: 1
+  dynamics_training_iterations: 10
+  curiosity_training_iterations: 10
+  H_max: 16
+  length_bias_k: 4.0
+  eval_interval: 100000
+  dp_transformer:
+    model:
+      d_model: 16
+      embedder_hidden_dim: 32
+      simnorm_dim: 4
+      dim_feedforward: 64
+      num_heads: 2
+      num_layers: 2
+    training:
+      lr: 0.0001
+      batch_size: 512
+    replay_buffer:
+      capacity: 1000000
+  curiosity_agent:
+    batch_size: 512
+    gamma: 0.99
+    replay_buffer:
+      capacity: 10000
+    actor:
+      hidden: 64
+      depth: 2
+      lr: 0.0001
+    critic:
+      hidden: 64
+      depth: 2
+      lr: 0.0001
+      tau: 0.001
+task_training:
+  actor:
+    hidden: 256
+    depth: 2
+  critic:
+    hidden: 256
+    depth: 2

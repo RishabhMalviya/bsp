@@ -1,3 +1,5 @@
+import time
+
 import gymnasium as gym
 import numpy as np
 import torch
@@ -14,7 +16,7 @@ from bsp.utils import make_env, sample_seq_length, set_seed
 class BodySchemaTrainer(BaseTrainer):
 	"""Base trainer class for TD-MPC2."""
 
-	def __init__(self, cfg, logger):
+	def __init__(self, cfg: DictConfig, logger):
 		set_seed(cfg.seed)
 
 		self.cfg = cfg
@@ -29,16 +31,17 @@ class BodySchemaTrainer(BaseTrainer):
 		obs_dim = gym.spaces.flatdim(self.env.observation_space)
 		act_dim = gym.spaces.flatdim(self.env.action_space)
 		self.H_max = self.cfg.curiosity_pre_training.H_max
+		self.warmup = max(self.dpt_cfg.training.batch_size, self.agent_cfg.batch_size) + self.H_max
 
 		self.agent = CuriosityAgent(self.agent_cfg, obs_dim, act_dim)
 		self.dynamics_predictor = DynamicsPredictor(self.dpt_cfg, obs_dim, act_dim, H_max=self.H_max)
 
 
-	def _eval(self, cfg: DictConfig) -> None:
+	def _eval(self) -> None:
 		"""
 			Run a single deterministic eval episode, log return and an RGB video.
 		"""
-		obs, _ = self.eval_env.reset(seed=cfg.seed)
+		obs, _ = self.eval_env.reset(seed=self.cfg.seed)
 		frames = [self.eval_env.render()]
 		episode_return = 0.0
 		done = False
@@ -100,37 +103,54 @@ class BodySchemaTrainer(BaseTrainer):
 
 		return obs, actions
 
-
-	def train(self, cfg: DictConfig) -> None:
-		"""Train an agent."""
-		# Collect Trajectories
-		obs, info = self.env.reset(seed=cfg.seed)
-		for _ in range(cfg.curiosity_pre_training.num_collection_episodes):
-			action = self.agent.act(obs)
-
+	def _collect_episodes(self) -> None:
+		obs, info = self.env.reset(seed=self.cfg.seed)
+		for _ in range(self.cfg.curiosity_pre_training.num_collection_episodes):
+			action = self.agent.act(obs).detach().cpu().numpy()
 			next_obs, reward, terminated, truncated, info = self.env.step(action)
+
 			self.agent.replay_buffer.add(obs, action, reward, next_obs, terminated | truncated)
 			self.dynamics_predictor.replay_buffer.add(obs, action, reward, next_obs, terminated | truncated)
 
 			obs = next_obs
-			if terminated or truncated:
-				obs, info = self.env.reset()
-			
+			if terminated or truncated: obs, info = self.env.reset()
+
 			self.timestep += 1
 
-		# Train DynamicsTransfomer
-		for _ in range(cfg.curiosity_pre_training.dynamics_training_iterations):
+	def _train_dynamics_predictor(self) -> None:
+		for _ in range(self.cfg.curiosity_pre_training.dynamics_training_iterations):
 			batch = self._prep_dynamics_predictor_training_batch()
 			dynamics_metrics = self.dynamics_predictor.update(batch)
 			self.logger.log(dynamics_metrics, step=self.timestep)
 
-
-		# Train Agent
-		for _ in range(cfg.curiosity_pre_training.curiosity_training_iterations):
+	def _train_agent(self) -> None:
+		for _ in range(self.cfg.curiosity_pre_training.curiosity_training_iterations):
 			batch = self._prep_agent_training_batch()
 			train_metrics = self.agent.update(batch)
 			self.logger.log(train_metrics, step=self.timestep)
 
-		# Eval
-		if self.timestep % cfg.curiosity_pre_training.eval_interval == 0:
-			self._eval(cfg)
+	def train(self) -> None:
+		"""Train an agent."""
+
+		for _ in range(self.cfg.curiosity_pre_training.total_num_episodes):
+			# Collect Episodes
+			collect_start = time.perf_counter()
+			self._collect_episodes()
+			self.logger.log({'time/collect_s': time.perf_counter() - collect_start}, step=self.timestep)
+
+			# Skip training until replay buffers have at least one batch's worth of data
+			if self.dynamics_predictor.replay_buffer.size < self.warmup: continue
+
+			# Train DynamicsTransfomer
+			dpt_start = time.perf_counter()
+			self._train_dynamics_predictor()
+			self.logger.log({'time/dpt_train_s': time.perf_counter() - dpt_start}, step=self.timestep)
+
+			# Train Agent
+			agent_start = time.perf_counter()
+			self._train_agent()
+			self.logger.log({'time/agent_train_s': time.perf_counter() - agent_start}, step=self.timestep)
+
+			# Eval
+			if self.timestep % self.cfg.curiosity_pre_training.eval_interval == 0:
+				self._eval()

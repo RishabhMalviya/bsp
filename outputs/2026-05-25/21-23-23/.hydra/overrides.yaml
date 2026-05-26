@@ -1,0 +1,2 @@
+- curiosity_pre_training.total_num_episodes=30
+- wandb.mode=disabled

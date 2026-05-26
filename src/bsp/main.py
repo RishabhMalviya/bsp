@@ -20,7 +20,7 @@ def main(cfg: DictConfig) -> None:
     trainer = BodySchemaTrainer(cfg, logger)
 
     try:
-        trainer.train(cfg)
+        trainer.train()
     finally:
         logger.finish()
 

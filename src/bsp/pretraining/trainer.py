@@ -111,7 +111,7 @@ class BodySchemaTrainer(BaseTrainer):
 		return obs, actions
 
 	def _collect_episodes(self, env: gym.Env) -> None:
-		self.agent.to_cpu()  # Saves on moving tensors back and forth at every timestep
+		# self.agent.to_cpu()  # Saves on moving tensors back and forth at every timestep
 
 		obs, _ = env.reset(seed=self.cfg.seed)
 		for _ in range(self.cfg.curiosity_pre_training.num_collections_per_loop):
@@ -129,7 +129,7 @@ class BodySchemaTrainer(BaseTrainer):
 
 			self.collected_episodes += 1
 		
-		self.agent.to_device()
+		# self.agent.to_device()
 
 	def _train_dynamics_predictor(self) -> None:
 		for _ in range(self.cfg.curiosity_pre_training.dynamics_training_iterations):

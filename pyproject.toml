@@ -15,7 +15,7 @@ dependencies = [
     "numpy",
     "torch",
     "hydra-core",
-    "wandb",
+    "wandb[media]",
     "tensordict>=0.12.4",
     "pandas>=2.3.3",
 ]

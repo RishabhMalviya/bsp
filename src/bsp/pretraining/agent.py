@@ -123,7 +123,18 @@ class CuriosityAgent(BaseAgent):
 
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
+
+        if self.logstd.grad is not None:
+            training_metrics['logstd_grad_norm'] = self.logstd.grad.norm().item()
+            training_metrics['logstd_grad_mean'] = self.logstd.grad.mean().item()
+            training_metrics['logstd_grad_abs_max'] = self.logstd.grad.abs().max().item()
+
         self.actor_optimizer.step()
+
+        with torch.no_grad():
+            training_metrics['logstd_mean'] = self.logstd.mean().item()
+            training_metrics['logstd_min'] = self.logstd.min().item()
+            training_metrics['logstd_max'] = self.logstd.max().item()
 
         # Soft Update Target Networks
         _soft_update(self.critic_local, self.critic_target, self.cfg.critic.tau)

@@ -8,10 +8,10 @@ from torch import nn, optim
 from torch.nn import functional as F
 from torch import distributions
 
-from bsp.common.replay_buffer import ReplayBuffer
 from bsp.common.utils import get_device
-from bsp.pretraining.nn_modules import MLP
 from bsp.common.base_classes import BaseAgent
+from bsp.common.replay_buffer import ReplayBuffer
+from bsp.pretraining.nn_modules import CuriosityPolicyNet, CuriosityValueNet
 
 
 device = get_device()
@@ -26,8 +26,8 @@ class CuriosityAgent(BaseAgent):
         self.replay_buffer = ReplayBuffer(obs_dim, ac_dim, cfg.replay_buffer.capacity)
 
         # Actor
-        self.actor = MLP(
-            in_dim=obs_dim, out_dim=ac_dim, final_activation=nn.Tanh(), hidden=self.cfg.actor.hidden, depth=self.cfg.actor.depth
+        self.actor = CuriosityPolicyNet(
+            obs_dim, ac_dim, hidden=self.cfg.actor.hidden, depth=self.cfg.actor.depth
         ).to(device)
 
         self.logstd = nn.Parameter(torch.ones(ac_dim, dtype=torch.float32, device=device)*math.log(0.5))  # High initial exploration noise, annealed by temperature in act()
@@ -38,13 +38,14 @@ class CuriosityAgent(BaseAgent):
         )
 
         # Critic
-        self.critic_local = MLP(
-            in_dim=obs_dim+ac_dim, out_dim=1, hidden=self.cfg.critic.hidden, depth=self.cfg.critic.depth
+        self.critic_local = CuriosityValueNet(
+            obs_dim, ac_dim, hidden=self.cfg.critic.hidden, depth=self.cfg.critic.depth
         ).to(device)
 
-        self.critic_target = MLP(
-            in_dim=obs_dim+ac_dim, out_dim=1, hidden=self.cfg.critic.hidden, depth=self.cfg.critic.depth
+        self.critic_target = CuriosityValueNet(
+            obs_dim, ac_dim, hidden=self.cfg.critic.hidden, depth=self.cfg.critic.depth
         ).to(device)
+
         self.critic_target.load_state_dict(self.critic_local.state_dict())
         self.critic_target.eval()
         

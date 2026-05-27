@@ -5,6 +5,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from bsp.common.nn_modules import DynamicsTransformer
+from bsp.common.nn_modules import MLP
 
 
 ############################################
@@ -95,18 +96,19 @@ class DynamicsPredictorModule(nn.Module):
 ############################################
 # Policy and Value Net MLPs
 ############################################
-class MLP(nn.Module):
-    def __init__(self, in_dim: int, out_dim: int, final_activation: nn.Module | None = None, hidden: int = 256, depth: int = 2):
-        super().__init__()
-        layers: list[nn.Module] = [nn.Linear(in_dim, hidden), nn.ReLU()]
-        for _ in range(depth - 1):
-            layers += [nn.Linear(hidden, hidden), nn.ReLU()]
-        layers.append(nn.Linear(hidden, out_dim))
-        if final_activation is not None:
-            layers.append(final_activation)
-        self.net = nn.Sequential(*layers)
+class CuriosityPolicyNet(MLP):
+    def __init__(self, obs_dim: int, ac_dim: int, hidden: int = 256, depth: int = 2):
+        super().__init__(in_dim=obs_dim, out_dim=ac_dim, hidden=hidden, depth=depth)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.net(x)
+    def forward(self, obs: torch.Tensor) -> torch.Tensor:
+        ac = super().forward(obs)
+        ac = torch.tanh(ac)
 
+        return ac
 
+class CuriosityValueNet(MLP):
+    def __init__(self, obs_dim: int, ac_dim: int, hidden: int = 256, depth: int = 2):
+        super().__init__(in_dim=obs_dim + ac_dim, out_dim=1, hidden=hidden, depth=depth)
+
+    def forward(self, obs: torch.Tensor) -> torch.Tensor:
+        return super().forward(obs) 

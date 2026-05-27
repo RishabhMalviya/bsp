@@ -127,3 +127,17 @@ class DynamicsTransformer(nn.Module):
         x = self.transformer(x)
 
         return x
+
+
+class MLP(nn.Module):
+    def __init__(self, in_dim: int, out_dim: int, hidden: int = 256, depth: int = 2):
+        super().__init__()
+        layers: list[nn.Module] = [nn.Linear(in_dim, hidden), nn.ReLU()]
+        for _ in range(depth - 1):
+            layers += [nn.Linear(hidden, hidden), nn.ReLU()]
+        layers.append(nn.Linear(hidden, out_dim))
+
+        self.net = nn.Sequential(*layers)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.net(x)

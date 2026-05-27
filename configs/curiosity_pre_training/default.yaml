@@ -1,7 +1,7 @@
 total_num_episodes: 1_000
 num_collections_per_loop: 1
-dynamics_training_iterations: 10
-curiosity_training_iterations: 10
+dynamics_predictor_utd: 10
+curiosity_agent_utd: 10
 H_max: 16
 length_bias_k: 4.0
 eval_every_episodes: 100

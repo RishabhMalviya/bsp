@@ -158,13 +158,13 @@ class BodySchemaTrainer(BaseTrainer):
 		self.agent.to_device()
 
 	def _train_dynamics_predictor(self) -> None:
-		for _ in range(self.cfg.curiosity_pre_training.dynamics_training_iterations):
+		for _ in range(self.cfg.curiosity_pre_training.dynamics_predictor_utd):
 			batch = self._prep_dynamics_predictor_training_batch()
 			dynamics_metrics = self.dynamics_predictor.update(batch)
 			self.logger.log(dynamics_metrics, step=self.timestep)
 
 	def _train_agent(self) -> None:
-		for _ in range(self.cfg.curiosity_pre_training.curiosity_training_iterations):
+		for _ in range(self.cfg.curiosity_pre_training.curiosity_agent_utd):
 			batch = self._prep_agent_training_batch()
 			train_metrics = self.agent.update(batch)
 			self.logger.log(train_metrics, step=self.timestep)

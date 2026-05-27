@@ -38,33 +38,30 @@ class ReplayBuffer:
 
 
     def sample(self, batch_size: int, L: int = 1) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        if L == 1:
-            idx = np.random.choice(self.size, size=batch_size, replace=False)
+        if L > self.size:
+            raise ValueError(f"Sequence length L={L} exceeds buffer size {self.size}")
+
+        # Enumerate window starts in temporal order so windows can't straddle
+        # the ring-buffer wrap seam (newest-to-oldest discontinuity at self.ptr).
+        if self.size < self.capacity:
+            starts = np.arange(self.size - L + 1)
         else:
-            if L > self.size:
-                raise ValueError(f"Sequence length L={L} exceeds buffer size {self.size}")
+            starts = (self.ptr + np.arange(self.capacity - L + 1)) % self.capacity
 
-            # Enumerate window starts in temporal order so windows can't straddle
-            # the ring-buffer wrap seam (newest-to-oldest discontinuity at self.ptr).
-            if self.size < self.capacity:
-                starts = np.arange(self.size - L + 1)
-            else:
-                starts = (self.ptr + np.arange(self.capacity - L + 1)) % self.capacity
+        # A sequence is invalid if any of the first L-1 transitions ended an
+        # episode; terminated/truncated on the final step is allowed.
+        break_idx = (starts[:, None] + np.arange(L - 1)[None, :]) % self.capacity
+        invalid = self.dones[break_idx] > 0
+        valid_starts = starts[~invalid.any(axis=1)]
 
-            # A sequence is invalid if any of the first H-1 transitions ended an
-            # episode; terminated/truncated on the final step is allowed.
-            break_idx = (starts[:, None] + np.arange(L - 1)[None, :]) % self.capacity
-            invalid = self.dones[break_idx] > 0
-            valid_starts = starts[~invalid.any(axis=1)]
+        if len(valid_starts) < batch_size:
+            raise ValueError(
+                f"Only {len(valid_starts)} valid length-{L} sequences available, "
+                f"requested batch_size={batch_size}"
+            )
 
-            if len(valid_starts) < batch_size:
-                raise ValueError(
-                    f"Only {len(valid_starts)} valid length-{L} sequences available, "
-                    f"requested batch_size={batch_size}"
-                )
-
-            chosen = np.random.choice(valid_starts, size=batch_size, replace=False)
-            idx = (chosen[:, None] + np.arange(L)[None, :]) % self.capacity
+        chosen = np.random.choice(valid_starts, size=batch_size, replace=False)
+        idx = (chosen[:, None] + np.arange(L)[None, :]) % self.capacity
 
         return (
             torch.from_numpy(self.obs[idx]).to(self.device),

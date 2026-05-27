@@ -39,7 +39,6 @@ class DynamicsPredictor():
         build a (B*L, L+1, ·) batch where row l masks positions p > l in both
         streams. Caller must ensure L + 1 <= H_max so positional embeddings fit.
         """
-        print(f'Inside compute_intrinsic_reward: obs shape {obs.shape}, ac shape {ac.shape}, next_obs shape {next_obs.shape}')
         B, L, obs_dim = obs.shape
         ac_dim = ac.shape[-1]
         Lp = L + 1

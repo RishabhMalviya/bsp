@@ -1,0 +1,6 @@
+actor:
+  hidden: 256
+  depth: 2
+critic:
+  hidden: 256
+  depth: 2

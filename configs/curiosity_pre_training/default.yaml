@@ -1,0 +1,36 @@
+total_num_episodes: 1_000
+num_collections_per_loop: 1
+dynamics_training_iterations: 10
+curiosity_training_iterations: 10
+H_max: 16
+length_bias_k: 4.0
+eval_interval: 100  # episodes
+
+dp_transformer:
+  model:
+    d_model: 16
+    embedder_hidden_dim: 32
+    simnorm_dim: 4
+    dim_feedforward: 64
+    num_heads: 2
+    num_layers: 2
+  training:
+    lr: 1e-4
+    batch_size: 512
+  replay_buffer:
+    capacity: 1_000_000
+
+curiosity_agent:
+  batch_size: 512
+  gamma: 0.99
+  replay_buffer:
+    capacity: 10_000
+  actor:
+    hidden: 64
+    depth: 2
+    lr: 1e-4
+  critic:
+    hidden: 64
+    depth: 2
+    lr: 1e-4
+    tau: 1e-3

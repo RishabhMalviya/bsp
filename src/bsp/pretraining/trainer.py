@@ -125,7 +125,7 @@ class BodySchemaTrainer(BaseTrainer):
 		return obs, actions
 
 	def _collect_episodes(self, env: gym.Env) -> None:
-		self.agent.to_cpu()  # Since the gym runs on CPU, keep the agent there during collection to avoid GPU-CPU data transfer overhead; train on GPU after collection finishes
+		self.agent.to_cpu()  # Keep the agent on CPU during collection to avoid GPU-CPU data transfer overhead
 
 		for _ in range(self.cfg.curiosity_pre_training.num_collections_per_loop):
 			obs, _ = env.reset(seed=self.cfg.seed)
@@ -187,5 +187,5 @@ class BodySchemaTrainer(BaseTrainer):
 				self._train_agent()
 
 			# Eval
-			if self.collected_episodes % self.cfg.curiosity_pre_training.eval_interval == 0:
+			if self.collected_episodes % self.cfg.curiosity_pre_training.eval_every_episodes == 0:
 				self._eval()

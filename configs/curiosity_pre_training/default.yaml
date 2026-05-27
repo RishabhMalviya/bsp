@@ -4,7 +4,7 @@ dynamics_training_iterations: 10
 curiosity_training_iterations: 10
 H_max: 16
 length_bias_k: 4.0
-eval_interval: 100  # episodes
+eval_every_episodes: 100
 
 dp_transformer:
   model:

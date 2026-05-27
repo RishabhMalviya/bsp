@@ -1,4 +1,7 @@
-.PHONY: smoke
+SESSION ?= bsp
+LOG ?= runs/bsp.log
+
+.PHONY: smoke run
 
 smoke:
 	HYDRA_FULL_ERROR=1 uv run python -m bsp.main \
@@ -9,3 +12,11 @@ smoke:
 	  curiosity_pre_training.dp_transformer.training.batch_size=32 \
 	  curiosity_pre_training.curiosity_agent.batch_size=32 \
 	  wandb.mode=disabled
+
+run:
+	mkdir -p $(dir $(LOG))
+	tmux new-session -d -s $(SESSION) "HYDRA_FULL_ERROR=1 uv run python -m bsp.main 2>&1 | tee $(LOG); exec bash"
+	@echo "Started in tmux session '$(SESSION)'."
+	@echo "  Attach:   tmux attach -t $(SESSION)"
+	@echo "  Tail log: tail -f $(LOG)"
+	@echo "  Kill:     tmux kill-session -t $(SESSION)"

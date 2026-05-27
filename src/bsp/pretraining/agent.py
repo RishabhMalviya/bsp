@@ -9,8 +9,8 @@ from torch.nn import functional as F
 from torch import distributions
 
 from bsp.common.replay_buffer import ReplayBuffer
-from bsp.utils import get_device
-from bsp.pretraining.nn_modules import MLP, DynamicsPredictorModule
+from bsp.common.utils import get_device
+from bsp.pretraining.nn_modules import MLP
 from bsp.common.base_classes import BaseAgent
 
 
@@ -19,9 +19,11 @@ device = get_device()
 
 class CuriosityAgent(BaseAgent):
     def __init__(self, cfg: DictConfig, obs_dim: int, ac_dim: int):
-        # Initialize self.replay_buffer and self.cfg
-        super().__init__(cfg, obs_dim, ac_dim)
+        self.cfg = cfg
         self.device = device
+
+        # Replay Buffer
+        self.replay_buffer = ReplayBuffer(obs_dim, ac_dim, cfg.replay_buffer.capacity)
 
         # Actor
         self.actor = MLP(

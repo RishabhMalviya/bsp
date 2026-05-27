@@ -8,7 +8,7 @@ with `--config-name=<name>`.
 import hydra
 from omegaconf import DictConfig
 
-from bsp.utils import Logger, set_seed
+from bsp.common.utils import Logger, set_seed
 from bsp.pretraining.trainer import BodySchemaTrainer
 
 

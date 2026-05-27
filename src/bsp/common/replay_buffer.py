@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from omegaconf import DictConfig
 
-from bsp.utils import get_device
+from bsp.common.utils import get_device
 
 
 class ReplayBuffer:

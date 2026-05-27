@@ -4,18 +4,21 @@ import torch.nn.functional as F
 from omegaconf import DictConfig
 
 
-from bsp.utils import get_device
-from bsp.common.base_classes import BaseAgent
+from bsp.common.replay_buffer import ReplayBuffer
+from bsp.common.utils import get_device
 from bsp.pretraining.nn_modules import DynamicsPredictorModule
 
 
 device = get_device()
 
 
-class DynamicsPredictor(BaseAgent):
+class DynamicsPredictor():
     def __init__(self, cfg: DictConfig, obs_dim, ac_dim, H_max):
-        super().__init__(cfg, obs_dim, ac_dim)
+        self.cfg = cfg
         
+        # Replay Buffer
+        self.replay_buffer = ReplayBuffer(obs_dim, ac_dim, cfg.replay_buffer.capacity)
+
         self.dynamics_predictor_module = DynamicsPredictorModule(
             ac_dim=ac_dim, obs_dim=obs_dim, H_max=H_max,
             **cfg.model,

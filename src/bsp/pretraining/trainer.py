@@ -9,8 +9,8 @@ from omegaconf import DictConfig
 from bsp.common.base_classes import BaseTrainer
 from bsp.pretraining.agent import CuriosityAgent
 from bsp.pretraining.dynamics_predictor import DynamicsPredictor
-from bsp.pretraining.utils import LinearSchedule
-from bsp.utils import make_env, sample_seq_length, set_seed
+from bsp.common.utils import LinearSchedule
+from bsp.common.utils import make_env, sample_seq_length, set_seed
 
 
 
@@ -54,14 +54,14 @@ class BodySchemaTrainer(BaseTrainer):
 		assert all(gym.spaces.flatdim(env.action_space) == gym.spaces.flatdim(self.envs[0].action_space) for env in self.envs)
 
 		obs_dim = gym.spaces.flatdim(self.envs[0].observation_space)
-		act_dim = gym.spaces.flatdim(self.envs[0].action_space)
+		ac_dim = gym.spaces.flatdim(self.envs[0].action_space)
 
 		self.eval_env = make_env(self.cfg.env.domain, self.cfg.env.downstream_task, self.cfg.env.max_episode_timesteps, seed=self.cfg.seed, render_mode="rgb_array")
 
 
 		# Trainable Components
-		self.agent = CuriosityAgent(self.agent_cfg, obs_dim, act_dim)
-		self.dynamics_predictor = DynamicsPredictor(self.dpt_cfg, obs_dim, act_dim, H_max=self.H_max)
+		self.agent = CuriosityAgent(self.agent_cfg, obs_dim, ac_dim)
+		self.dynamics_predictor = DynamicsPredictor(self.dpt_cfg, obs_dim, ac_dim, H_max=self.H_max)
 
 	def _eval(self) -> None:
 		"""
@@ -127,8 +127,8 @@ class BodySchemaTrainer(BaseTrainer):
 	def _collect_episodes(self, env: gym.Env) -> None:
 		self.agent.to_cpu()  # Since the gym runs on CPU, keep the agent there during collection to avoid GPU-CPU data transfer overhead; train on GPU after collection finishes
 
-		obs, _ = env.reset(seed=self.cfg.seed)
 		for _ in range(self.cfg.curiosity_pre_training.num_collections_per_loop):
+			obs, _ = env.reset(seed=self.cfg.seed)
 			for _ in range(int(self.episode_length_schedule.value)):
 				action = self.agent.act(obs, temperature=self.temperature_schedule.value).detach().cpu().numpy()
 				next_obs, reward, terminated, truncated, _ = env.step(action)

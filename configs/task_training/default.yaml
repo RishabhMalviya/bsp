@@ -1,6 +1,16 @@
+total_num_episodes: 1_000
+num_collections_per_loop: 1
+max_episode_len: 1_000
+eval_interval: 100  # episodes
+batch_size: 512
+replay_buffer:
+  capacity: 10_000
 actor:
-  hidden: 256
-  depth: 2
+  training:
+    lr: 1e-4
 critic:
   hidden: 256
   depth: 2
+  training:
+    lr: 1e-4
+    tau: 1e-3

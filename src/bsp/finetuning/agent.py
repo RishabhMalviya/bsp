@@ -4,6 +4,9 @@ import torch
 import torch.nn as nn
 from omegaconf import DictConfig
 
+from bsp.common.base_classes import BaseAgent
+from bsp.common.replay_buffer import ReplayBuffer
+
 
 class MLP(nn.Module):
     def __init__(self, in_dim: int, out_dim: int, hidden: int = 256, depth: int = 2):
@@ -18,14 +21,17 @@ class MLP(nn.Module):
         return self.net(x)
 
 
-class Agent:
+class Agent(BaseAgent):
     def __init__(self, cfg: DictConfig, obs_dim: int, act_dim: int):
         self.cfg = cfg
+
+        self.replay_buffer = ReplayBuffer(obs_dim, act_dim, cfg.replay_buffer.capacity)
+
         self.policy = MLP(obs_dim, act_dim, hidden=cfg.agent.hidden, depth=cfg.agent.depth)
         self.value = MLP(obs_dim, 1, hidden=cfg.agent.hidden, depth=cfg.agent.depth)
 
-    def act(self, obs: torch.Tensor) -> torch.Tensor:
+    def act(self, obs) -> torch.Tensor:
         raise NotImplementedError
     
-    def update(self, batch: dict[str, torch.Tensor]) -> dict[str, float]:
+    def update(self, batch) -> dict[str, float]:
         raise NotImplementedError

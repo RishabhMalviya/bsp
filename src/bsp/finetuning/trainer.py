@@ -56,7 +56,7 @@ class TaskSpecificTrainer(BaseTrainer):
 			self.collected_episodes += 1
 
 	def _train_agent(self) -> None:
-		for _ in range(self.cfg.task_training.curiosity_training_iterations):
+		for _ in range(self.cfg.task_training.curiosity_agent_utd):
 			batch = self.agent.replay_buffer.sample(self.cfg.task_training.batch_size)
 			train_metrics = self.agent.update(batch)
 			self.logger.log(train_metrics, step=self.timestep)

@@ -2,6 +2,14 @@ total_num_episodes: 1_000
 num_collections_per_loop: 1
 max_episode_len: 1_000
 eval_interval: 100  # episodes
+
+total_num_episodes: 1_000
+num_collections_per_loop: 1
+utd: 10
+H_max: 16
+length_bias_k: 4.0
+eval_every_episodes: 100
+
 batch_size: 512
 replay_buffer:
   capacity: 10_000

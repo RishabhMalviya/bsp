@@ -1,13 +1,17 @@
 """Helpers: seeding, device, etc."""
 
 import contextlib
+import json
 import random
+import subprocess
 import time
+from pathlib import Path
 
 import wandb
 import torch
 import numpy as np
 import gymnasium as gym
+from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig, OmegaConf
 from shimmy.registration import DM_CONTROL_SUITE_ENVS
 
@@ -33,18 +37,54 @@ def sample_seq_length(H_max: int, bias_k: float = 4.0) -> int:
     return int(np.ceil(H_max * u ** (1.0 / bias_k)))
 
 
+def _get_git_branch() -> str:
+    try:
+        out = subprocess.run(
+            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+            capture_output=True, text=True, check=True,
+        )
+        return out.stdout.strip() or 'no-branch'
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return 'no-git'
+
+
+def _next_run_name(branch: str, counter_path: Path) -> str:
+    counter_path.parent.mkdir(parents=True, exist_ok=True)
+    counters: dict[str, int] = {}
+    if counter_path.exists():
+        try:
+            counters = json.loads(counter_path.read_text())
+        except json.JSONDecodeError:
+            counters = {}
+    idx = counters.get(branch, 0)
+    counters[branch] = idx + 1
+    counter_path.write_text(json.dumps(counters, indent=2))
+    return f"{branch}-{idx}"
+
+
 class Logger:
     """Thin wrapper around wandb for logging scalar metrics."""
 
     def __init__(self, cfg: DictConfig):
+        name = cfg.wandb.name
+        if name is None:
+            name = _next_run_name(_get_git_branch(), Path(cfg.log_dir) / '.run_counter.json')
+
         self.run = wandb.init(
             project=cfg.wandb.project,
             entity=cfg.wandb.entity,
-            name=cfg.wandb.name,
+            name=name,
             group=cfg.wandb.group,
             mode=cfg.wandb.mode,
             config=OmegaConf.to_container(cfg, resolve=True),  # type: ignore[reportArgumentType]
         )
+
+        try:
+            hydra_dir = Path(HydraConfig.get().runtime.output_dir) / '.hydra'
+        except ValueError:
+            hydra_dir = None
+        if hydra_dir is not None and hydra_dir.is_dir():
+            wandb.save(str(hydra_dir / '*.yaml'), base_path=str(hydra_dir.parent), policy='now')
 
     def log(self, metrics: dict, step: int | None = None) -> None:
         wandb.log(metrics, step=step)

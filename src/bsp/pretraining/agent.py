@@ -11,6 +11,7 @@ from torch import distributions
 from bsp.common.utils import get_device
 from bsp.common.base_classes import BaseAgent
 from bsp.common.replay_buffer import ReplayBuffer
+from bsp.common.utils import _safe_histogram
 from bsp.pretraining.nn_modules import CuriosityPolicyNet, CuriosityValueNet
 
 
@@ -55,7 +56,7 @@ class CuriosityAgent(BaseAgent):
         self.actor.to('cpu')
         self.critic_local.to('cpu')
         self.critic_target.to('cpu')
-        self.logstd = nn.Parameter(self.logstd.data.to('cpu'))
+        self.logstd.data = self.logstd.data.to('cpu')
 
         self.device = 'cpu'
 
@@ -63,7 +64,7 @@ class CuriosityAgent(BaseAgent):
         self.actor.to(device)
         self.critic_local.to(device)
         self.critic_target.to(device)
-        self.logstd = nn.Parameter(self.logstd.data.to(device))
+        self.logstd.data = self.logstd.data.to(device)
 
         self.device = device
 
@@ -85,7 +86,7 @@ class CuriosityAgent(BaseAgent):
         if deterministic:
             return action_dist.mean
         else:
-            return action_dist.sample()
+            return action_dist.rsample()
 
 
     def update(self, batch: tuple[torch.Tensor, ...]) -> dict[str, float]:
@@ -100,7 +101,7 @@ class CuriosityAgent(BaseAgent):
                 target_param.data.copy_(tau*local_param.data + (1.0-tau)*target_param.data)
 
         obs, actions, rewards, next_obs, dones = batch
-        training_metrics = {}
+        metrics = {}
 
         # Train Critic
         with torch.no_grad():
@@ -110,23 +111,34 @@ class CuriosityAgent(BaseAgent):
 
         critic_pred = self.critic_local(torch.cat([obs, actions], dim=-1)).squeeze(-1)
         critic_loss = F.mse_loss(critic_pred, td_target)
-        training_metrics['critic_loss'] = critic_loss.item()
+        metrics['critic_loss'] = critic_loss.item()
 
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
         self.critic_optimizer.step()
 
         # Train Actor
-        pi_actions = self.act(obs, deterministic=True)
-        actor_loss = -self.critic_target(torch.cat([obs, pi_actions], dim=-1)).mean()
-        training_metrics['actor_loss'] = actor_loss.item()
+        pi_dist = self._get_action_distribution(obs)
+        pi_actions = pi_dist.rsample()
+        actions_value = self.critic_target(torch.cat([obs, pi_actions], dim=-1))
+        entropy = pi_dist.entropy().sum(-1).mean()
+        actor_loss = -actions_value.mean() - self.cfg.actor.entropy_coef*entropy
+        metrics['actor_loss'] = actor_loss.item()
+        metrics['actor_entropy'] = entropy.item()
 
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
+
+        if self.logstd.grad is not None:
+            metrics['logstd_grad'] = _safe_histogram(self.logstd.grad)
+
         self.actor_optimizer.step()
+
+        with torch.no_grad():
+            metrics['logstd'] = _safe_histogram(self.logstd, num_bins=128, min_range=1e-4)
 
         # Soft Update Target Networks
         _soft_update(self.critic_local, self.critic_target, self.cfg.critic.tau)
 
-        return training_metrics
+        return metrics
 

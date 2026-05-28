@@ -96,10 +96,17 @@ class DynamicsPredictor():
 
         self.optimizer.zero_grad()
         loss.backward()
-        self.optimizer.step()
 
-        return {
+        metrics = {
             'dp_state_loss': state_loss.item(),
             'dp_action_loss': action_loss.item(),
             'dp_total_loss': loss.item(),
         }
+        # if self.dynamics_predictor_module.last_state_slice_grad_norm is not None:
+        #     metrics['dp_state_slice_grad_norm'] = self.dynamics_predictor_module.last_state_slice_grad_norm
+        # if self.dynamics_predictor_module.last_action_slice_grad_norm is not None:
+        #     metrics['dp_action_slice_grad_norm'] = self.dynamics_predictor_module.last_action_slice_grad_norm
+
+        self.optimizer.step()
+
+        return metrics

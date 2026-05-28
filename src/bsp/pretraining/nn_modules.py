@@ -29,6 +29,16 @@ class ActionUnEmbedder(nn.Module):
 ############################################
 # State Enc/Unenc
 ############################################
+class LearnableScale(nn.Module):
+    def __init__(self, dim: int, init_value: float | None = None):
+        super().__init__()
+        self.scale = nn.Parameter(torch.ones(dim))
+        if init_value is not None:
+            nn.init.constant_(self.scale, init_value)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x * self.scale
+
 class StateUnEmbedder(nn.Module):
     def __init__(self, obs_dim: int, d_model: int, hidden: int):
         super().__init__()
@@ -36,7 +46,8 @@ class StateUnEmbedder(nn.Module):
         layers = [
             nn.Linear(d_model, hidden), nn.ReLU(),
             nn.Linear(hidden, hidden), nn.ReLU(),
-            nn.Linear(hidden, obs_dim), nn.ReLU()
+            nn.Linear(hidden, obs_dim), 
+                LearnableScale(obs_dim, init_value=0.1), nn.Tanh(), LearnableScale(obs_dim, init_value=10.0)
         ]
 
         self.net = nn.Sequential(*layers)
@@ -78,6 +89,11 @@ class DynamicsPredictorModule(nn.Module):
         self.action_unembedder = ActionUnEmbedder(ac_dim=ac_dim, d_model=d_model, hidden=embedder_hidden_dim)
         self.state_unembedder = StateUnEmbedder(obs_dim=obs_dim, d_model=d_model, hidden=embedder_hidden_dim)
 
+        # Diagnostics: grad norms at the state/action slices of the transformer
+        # output, populated by backward hooks registered in forward().
+        self.last_state_slice_grad_norm: float | None = None
+        self.last_action_slice_grad_norm: float | None = None
+
     def forward(
         self,
         obs: torch.Tensor,
@@ -87,8 +103,20 @@ class DynamicsPredictorModule(nn.Module):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         x = self.dynamics_transformer(obs, ac, state_mask, action_mask)
 
-        predicted_states = self.state_unembedder(x[:, ::2, :])
-        predicted_actions = self.action_unembedder(x[:, 1::2, :])
+        state_slice = x[:, ::2, :]
+        action_slice = x[:, 1::2, :]
+
+        if state_slice.requires_grad:
+            state_slice.register_hook(
+                lambda g: setattr(self, 'last_state_slice_grad_norm', g.detach().norm().item())
+            )
+        if action_slice.requires_grad:
+            action_slice.register_hook(
+                lambda g: setattr(self, 'last_action_slice_grad_norm', g.detach().norm().item())
+            )
+
+        predicted_states = self.state_unembedder(state_slice)
+        predicted_actions = self.action_unembedder(action_slice)
 
         return predicted_states, predicted_actions
 

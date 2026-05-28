@@ -83,7 +83,7 @@ class BodySchemaTrainer(BaseTrainer):
 		video = np.stack(frames).transpose(0, 3, 1, 2)  # pyright: ignore[reportCallIssue, reportArgumentType]
 		self.logger.log(
 			{
-				'Eval Return': episode_return,
+				# 'Eval Return': episode_return,
 				'Eval Video': wandb.Video(video, fps=30, format='mp4'),
 			},
 			step=self.timestep,
@@ -146,14 +146,14 @@ class BodySchemaTrainer(BaseTrainer):
 			self.collected_episodes += 1
 			self.temperature_schedule.step()
 			self.episode_length_schedule.step()
-			self.logger.log(
-				{
-					'Collected Episodes': self.collected_episodes,
-					'temperature': self.temperature_schedule.value,
-					'episode_length': self.episode_length_schedule.value,
-				},
-				step=self.timestep,
-			)
+			# self.logger.log(
+			# 	{
+			# 		'Collected Episodes': self.collected_episodes,
+			# 		'temperature': self.temperature_schedule.value,
+			# 		'episode_length': self.episode_length_schedule.value,
+			# 	},
+			# 	step=self.timestep,
+			# )
 
 		self.agent.to_device()
 

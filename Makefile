@@ -1,7 +1,7 @@
 SESSION ?= bsp
 LOG ?= runs/bsp.log
 
-.PHONY: smoke run
+.PHONY: smoke small run
 
 smoke:
 	HYDRA_FULL_ERROR=1 uv run python -m bsp.main \
@@ -12,6 +12,11 @@ smoke:
 	  curiosity_pre_training.dp_transformer.training.batch_size=32 \
 	  curiosity_pre_training.curiosity_agent.batch_size=32 \
 	  wandb.mode=disabled
+
+small:
+	HYDRA_FULL_ERROR=1 uv run python -m bsp.main \
+	  curiosity_pre_training.total_num_episodes=50 \
+	  curiosity_pre_training.eval_every_episodes=25
 
 run:
 	mkdir -p $(dir $(LOG))

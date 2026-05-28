@@ -135,3 +135,13 @@ class LinearSchedule:
 
 	def step(self, n: int = 1) -> None:
 		self._n += n
+
+
+def _safe_histogram(tensor: torch.Tensor, num_bins: int = 32, min_range: float = 1e-3) -> wandb.Histogram:
+    """wandb.Histogram that doesn't crash when all values are (near-)identical."""
+    data = tensor.detach().cpu().numpy()
+    v_lo, v_hi = float(data.min()), float(data.max())
+    half = max(0.5 * (v_hi - v_lo), 0.5 * min_range)
+    mid = 0.5 * (v_lo + v_hi)
+    counts, edges = np.histogram(data, bins=num_bins, range=(mid - half, mid + half))
+    return wandb.Histogram(np_histogram=(counts, edges))

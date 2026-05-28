@@ -4,7 +4,7 @@ dynamics_predictor_utd: 10
 curiosity_agent_utd: 10
 H_max: 16
 length_bias_k: 4.0
-eval_every_episodes: 100
+eval_every_episodes: 250
 
 dp_transformer:
   model:
@@ -29,6 +29,7 @@ curiosity_agent:
     hidden: 64
     depth: 2
     lr: 1e-4
+    entropy_coef: 0.01
   critic:
     hidden: 64
     depth: 2

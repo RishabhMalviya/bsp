@@ -76,7 +76,7 @@ class BodySchemaTrainer(BaseTrainer):
 			if isinstance(action, torch.Tensor):
 				action = action.detach().cpu().numpy()
 			obs, reward, terminated, truncated, _ = self.eval_env.step(action)
-			frames.append(self.eval_env.render())
+			frames.append(self.eval_env.render(camera_id=0))  # pyright: ignore[reportCallIssue]
 			episode_return += float(reward)
 			done = terminated or truncated
 

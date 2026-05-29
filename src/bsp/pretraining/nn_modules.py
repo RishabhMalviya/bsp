@@ -46,8 +46,7 @@ class StateUnEmbedder(nn.Module):
         layers = [
             nn.Linear(d_model, hidden), nn.ReLU(),
             nn.Linear(hidden, hidden), nn.ReLU(),
-            nn.Linear(hidden, obs_dim), 
-                LearnableScale(obs_dim, init_value=0.1), nn.Tanh(), LearnableScale(obs_dim, init_value=10.0)
+            nn.Linear(hidden, obs_dim)
         ]
 
         self.net = nn.Sequential(*layers)

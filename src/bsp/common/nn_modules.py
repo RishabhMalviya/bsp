@@ -129,6 +129,57 @@ class DynamicsTransformer(nn.Module):
         return x
 
 
+class RunningMeanStd(nn.Module):
+    """Per-dimension running mean and variance via Welford's online algorithm.
+
+    Stats live as buffers (state_dict-saved, device-aware). Initial mean=0,
+    var=1 make `normalize` a no-op before any `update` calls.
+    """
+
+    mean: torch.Tensor
+    var: torch.Tensor
+    count: torch.Tensor
+
+    def __init__(self, shape: int | tuple[int, ...], epsilon: float = 1e-8):
+        super().__init__()
+        if isinstance(shape, int):
+            shape = (shape,)
+        self.register_buffer('mean', torch.zeros(shape))
+        self.register_buffer('var', torch.ones(shape))
+        self.register_buffer('count', torch.zeros(()))
+        self.epsilon = epsilon
+
+    @torch.no_grad()
+    def update(self, x: torch.Tensor) -> None:
+        x = x.reshape(-1, *self.mean.shape)
+        batch_count = x.shape[0]
+        if batch_count == 0:
+            return
+
+        batch_mean = x.mean(dim=0)
+        batch_var = x.var(dim=0, unbiased=False)
+
+        total_count = self.count + batch_count
+        delta = batch_mean - self.mean
+        new_mean = self.mean + delta * (batch_count / total_count)
+        new_M2 = (
+            self.var * self.count
+            + batch_var * batch_count
+            + delta.pow(2) * self.count * batch_count / total_count
+        )
+        new_var = new_M2 / total_count
+
+        self.mean.copy_(new_mean)
+        self.var.copy_(new_var)
+        self.count.copy_(total_count)
+
+    def normalize(self, x: torch.Tensor) -> torch.Tensor:
+        return (x - self.mean) / torch.sqrt(self.var + self.epsilon)
+
+    def denormalize(self, x: torch.Tensor) -> torch.Tensor:
+        return x * torch.sqrt(self.var + self.epsilon) + self.mean
+
+
 class MLP(nn.Module):
     def __init__(self, in_dim: int, out_dim: int, hidden: int = 256, depth: int = 2):
         super().__init__()

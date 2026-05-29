@@ -1,10 +1,10 @@
-total_num_episodes: 1_000
+total_num_episodes: 10_000
 num_collections_per_loop: 1
 dynamics_predictor_utd: 10
 curiosity_agent_utd: 10
 H_max: 16
 length_bias_k: 4.0
-eval_every_episodes: 250
+eval_every_episodes: 2_500
 
 dp_transformer:
   model:
@@ -18,7 +18,7 @@ dp_transformer:
     lr: 1e-4
     batch_size: 512
   replay_buffer:
-    capacity: 1_000_000
+    capacity: 100_000
 
 curiosity_agent:
   batch_size: 512
@@ -29,7 +29,7 @@ curiosity_agent:
     hidden: 64
     depth: 2
     lr: 1e-4
-    entropy_coef: 0.01
+    entropy_coef: 1e-2
   critic:
     hidden: 64
     depth: 2

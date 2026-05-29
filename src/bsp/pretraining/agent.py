@@ -122,7 +122,7 @@ class CuriosityAgent(BaseAgent):
         pi_actions = pi_dist.rsample()
         actions_value = self.critic_target(torch.cat([obs, pi_actions], dim=-1))
         entropy = pi_dist.entropy().sum(-1).mean()
-        actor_loss = -actions_value.mean() - self.cfg.actor.entropy_coef*entropy
+        actor_loss = -actions_value.mean()  # - self.cfg.actor.entropy_coef*entropy
         metrics['actor_loss'] = actor_loss.item()
         metrics['actor_entropy'] = entropy.item()
 

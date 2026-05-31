@@ -89,12 +89,17 @@ class CuriosityAgent(BaseAgent):
             return action_dist.rsample()
 
 
-    def update(self, batch: tuple[torch.Tensor, ...]) -> dict[str, float]:
+    def update(self, batch: tuple[torch.Tensor, ...], entropy_coef: float = 0.0, smoothness_coef: float = 0.0) -> dict[str, float]:
         """
             Update the agent's actor and critic networks using a batch of experiences.
             Expects batch = (obs, actions, rewards, next_obs, dones) where rewards
             are intrinsic rewards from the dynamics predictor and dones are
             (terminated | truncated) as floats.
+
+            `entropy_coef` weights the policy entropy bonus in the actor loss.
+            `smoothness_coef` weights an L2 penalty on the predicted action
+            magnitude (control signal), encouraging movement smoothness. It is
+            phased in over training via a schedule owned by the trainer.
         """
         def _soft_update(local_model, target_model, tau):
             for target_param, local_param in zip(target_model.parameters(), local_model.parameters()):
@@ -120,11 +125,17 @@ class CuriosityAgent(BaseAgent):
         # Train Actor
         pi_dist = self._get_action_distribution(obs)
         pi_actions = pi_dist.rsample()
-        actions_value = self.critic_target(torch.cat([obs, pi_actions], dim=-1))
-        entropy = pi_dist.entropy().sum(-1).mean()
-        actor_loss = -actions_value.mean()  # - self.cfg.actor.entropy_coef*entropy
+
+        actions_value_loss = -self.critic_target(torch.cat([obs, pi_actions], dim=-1)).mean()
+        entropy_loss = -pi_dist.entropy().sum(-1).mean()
+        smoothness_loss = pi_actions.pow(2).sum(-1).mean()  # L2 penalty on control signal magnitude
+
+        actor_loss = actions_value_loss + (entropy_coef * entropy_loss) + (smoothness_coef * smoothness_loss)
+
         metrics['actor_loss'] = actor_loss.item()
-        metrics['actor_entropy'] = entropy.item()
+        metrics['actions_value_loss'] = actions_value_loss.item()
+        metrics['actor_entropy'] = entropy_loss.item()
+        metrics['actor_smoothness_loss'] = smoothness_loss.item()
 
         self.actor_optimizer.zero_grad()
         actor_loss.backward()

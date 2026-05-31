@@ -45,6 +45,11 @@ class BodySchemaTrainer(BaseTrainer):
 			final=cfg.env.max_episode_timesteps,
 			ramp_steps=cfg.curiosity_pre_training.total_num_episodes // 4
 		)
+		self.smoothness_schedule = LinearSchedule(
+			initial=0.0,
+			final=self.agent_cfg.actor.smoothness_coef,
+			ramp_steps=self.agent_cfg.actor.smoothness_ramp_episodes
+		)
 
 
 		# Environments
@@ -146,6 +151,7 @@ class BodySchemaTrainer(BaseTrainer):
 			self.collected_episodes += 1
 			self.temperature_schedule.step()
 			self.episode_length_schedule.step()
+			self.smoothness_schedule.step()
 			# self.logger.log(
 			# 	{
 			# 		'Collected Episodes': self.collected_episodes,
@@ -166,7 +172,11 @@ class BodySchemaTrainer(BaseTrainer):
 	def _train_agent(self) -> None:
 		for _ in range(self.cfg.curiosity_pre_training.curiosity_agent_utd):
 			batch = self._prep_agent_training_batch()
-			train_metrics = self.agent.update(batch)
+			train_metrics = self.agent.update(
+				batch,
+				entropy_coef=self.agent_cfg.actor.entropy_coef,
+				smoothness_coef=self.smoothness_schedule.value,
+			)
 			self.logger.log(train_metrics, step=self.timestep)
 
 	def train(self) -> None:
@@ -186,6 +196,8 @@ class BodySchemaTrainer(BaseTrainer):
 			with self.logger.timer('time/agent_train_s', step=lambda: self.timestep):
 				self._train_agent()
 
-			# Eval
+			# Eval and Checkpointing
 			if self.collected_episodes % self.cfg.curiosity_pre_training.eval_every_episodes == 0:
 				self._eval()
+				self._save_checkpoint()
+

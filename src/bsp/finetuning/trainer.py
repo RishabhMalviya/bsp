@@ -2,7 +2,7 @@ import gymnasium as gym
 from omegaconf import DictConfig
 
 from bsp.common.base_classes import BaseTrainer
-from bsp.finetuning.agent import Agent
+from bsp.finetuning.agent import BSPAgent
 from bsp.common.utils import make_env, set_seed
 
 
@@ -22,7 +22,7 @@ class TaskSpecificTrainer(BaseTrainer):
 		obs_dim = gym.spaces.flatdim(self.env.observation_space)
 		ac_dim = gym.spaces.flatdim(self.env.action_space)
 
-		self.agent = Agent(cfg, obs_dim, ac_dim)
+		self.agent = BSPAgent(cfg, obs_dim, ac_dim)
 
 	def _eval(self) -> None:
 		"""Evaluate an agent."""

@@ -1,4 +1,4 @@
-total_num_episodes: 5_000
+total_num_episodes: 10_000
 num_collections_per_loop: 1
 dynamics_predictor_utd: 100
 curiosity_agent_utd: 10

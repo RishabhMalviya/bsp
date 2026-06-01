@@ -15,8 +15,6 @@ from bsp.common.utils import make_env, sample_seq_length, set_seed
 
 
 class BodySchemaTrainer(BaseTrainer):
-	"""Base trainer class for TD-MPC2."""
-
 	def __init__(self, cfg: DictConfig, logger):
 		set_seed(cfg.seed)
 
@@ -199,5 +197,4 @@ class BodySchemaTrainer(BaseTrainer):
 			# Eval and Checkpointing
 			if self.collected_episodes % self.cfg.curiosity_pre_training.eval_every_episodes == 0:
 				self._eval()
-				self._save_checkpoint()
 

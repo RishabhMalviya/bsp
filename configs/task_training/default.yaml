@@ -1,20 +1,30 @@
-total_num_episodes: 1_000
+total_num_episodes: 10_000
 max_episode_len: 1_000
 num_collections_per_loop: 1
 utd: 10
-H_max: 16
-length_bias_k: 4.0
-eval_every_episodes: 100
-
 batch_size: 512
+H_max: 16
+eval_interval: 1_000      # in collected episodes
+eval_num_episodes: 5
+
+# Path to a pretrained `dynamics_transformer.pth` to warm-start the policy.
+# null trains the DynamicsTransformer from scratch. main.py sets this to the
+# checkpoint produced by the preceding pretraining run.
+dpt_checkpoint_path: null
+
 replay_buffer:
   capacity: 10_000
+
+agent:
+  gamma: 0.99
+
 actor:
-  training:
-    lr: 1e-4
+  actor_lr: 1e-4
+  entropy_coef: 1e-4
+  smoothness_coef: 1e-2
+
 critic:
   hidden: 256
   depth: 2
-  training:
-    lr: 1e-4
-    tau: 1e-3
+  critic_lr: 1e-4
+  tau: 1e-3

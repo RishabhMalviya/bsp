@@ -89,6 +89,12 @@ class Logger:
     def log(self, metrics: dict, step: int | None = None) -> None:
         wandb.log(metrics, step=step)
 
+    def log_artifact(self, path: str | Path, name: str, type: str = 'model') -> None:
+        """Log a local file as a versioned wandb artifact tied to this run."""
+        artifact = wandb.Artifact(name=name, type=type)
+        artifact.add_file(str(path))
+        self.run.log_artifact(artifact)
+
     @contextlib.contextmanager
     def timer(self, key: str, step=None):
         """Time the wrapped block and log the elapsed seconds under `key`.

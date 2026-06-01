@@ -4,16 +4,10 @@ dynamics_predictor_utd: 100
 curiosity_agent_utd: 10
 H_max: 16
 length_bias_k: 4.0
-eval_every_episodes: 2_500
+eval_and_chkpt_cadence__in_episodes: 2_500
 
 dp_transformer:
-  model:
-    d_model: 16
-    embedder_hidden_dim: 32
-    simnorm_dim: 4
-    dim_feedforward: 64
-    num_heads: 2
-    num_layers: 2
+  # Architecture (model) params now live in the shared `dp_transformer` config group.
   training:
     lr: 1e-4
     batch_size: 1024

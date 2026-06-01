@@ -133,20 +133,20 @@ class CuriosityAgent(BaseAgent):
         actor_loss = actions_value_loss + (entropy_coef * entropy_loss) + (smoothness_coef * smoothness_loss)
 
         metrics['actor_loss'] = actor_loss.item()
-        metrics['actions_value_loss'] = actions_value_loss.item()
-        metrics['actor_entropy'] = entropy_loss.item()
-        metrics['actor_smoothness_loss'] = smoothness_loss.item()
+        # metrics['actions_value_loss'] = actions_value_loss.item()
+        # metrics['actor_entropy'] = entropy_loss.item()
+        # metrics['actor_smoothness_loss'] = smoothness_loss.item()
 
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
 
-        if self.logstd.grad is not None:
-            metrics['logstd_grad'] = _safe_histogram(self.logstd.grad)
+        # if self.logstd.grad is not None:
+        #     metrics['logstd_grad'] = _safe_histogram(self.logstd.grad)
 
         self.actor_optimizer.step()
 
-        with torch.no_grad():
-            metrics['logstd'] = _safe_histogram(self.logstd, num_bins=128, min_range=1e-4)
+        # with torch.no_grad():
+        #     metrics['logstd'] = _safe_histogram(self.logstd, num_bins=128, min_range=1e-4)
 
         # Soft Update Target Networks
         _soft_update(self.critic_local, self.critic_target, self.cfg.critic.tau)

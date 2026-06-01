@@ -9,7 +9,7 @@ from bsp.common.nn_modules import MLP
 
 
 ############################################
-# Dynamics Predictor
+# Actor
 ############################################
 class ActionPredictionHead(nn.Module):
     def __init__(self, ac_dim: int, d_model: int, hidden: int):
@@ -71,6 +71,9 @@ class BSPPolicyNet(nn.Module):
         return predicted_actions
 
 
+############################################
+# Critic
+############################################
 class TaskValueNet(MLP):
     def __init__(self, obs_dim: int, ac_dim: int, hidden: int = 256, depth: int = 2):
         super().__init__(in_dim=obs_dim + ac_dim, out_dim=1, hidden=hidden, depth=depth)

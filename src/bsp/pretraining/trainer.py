@@ -1,4 +1,5 @@
 import random
+from pathlib import Path
 
 import gymnasium as gym
 import numpy as np
@@ -23,7 +24,8 @@ class BodySchemaTrainer(BaseTrainer):
 		# Configs
 		self.cfg = cfg
 		self.agent_cfg = cfg.curiosity_pre_training.curiosity_agent
-		self.dpt_cfg = cfg.curiosity_pre_training.dp_transformer
+		self.dpt_cfg = cfg.curiosity_pre_training.dp_transformer  # Training parameters 
+		self.dpt_model_cfg = cfg.dp_transformer  # Architecture parameters
 
 
 		# Bookkeeping
@@ -66,7 +68,7 @@ class BodySchemaTrainer(BaseTrainer):
 
 		# Trainable Components
 		self.agent = CuriosityAgent(self.agent_cfg, obs_dim, ac_dim)
-		self.dynamics_predictor = DynamicsPredictor(self.dpt_cfg, obs_dim, ac_dim, H_max=self.H_max)
+		self.dynamics_predictor = DynamicsPredictor(self.dpt_cfg, obs_dim, ac_dim, H_max=self.H_max, model_cfg=self.dpt_model_cfg)
 
 	def _eval(self) -> None:
 		"""
@@ -135,7 +137,8 @@ class BodySchemaTrainer(BaseTrainer):
 		for _ in range(self.cfg.curiosity_pre_training.num_collections_per_loop):
 			obs, _ = env.reset(seed=self.cfg.seed)
 			for _ in range(int(self.episode_length_schedule.value)):
-				action = self.agent.act(obs, temperature=self.temperature_schedule.value).detach().cpu().numpy()
+				with torch.no_grad():
+					action = self.agent.act(obs, temperature=self.temperature_schedule.value).detach().cpu().numpy()
 				next_obs, reward, terminated, truncated, _ = env.step(action)
 
 				self.agent.replay_buffer.add(obs, action, reward, next_obs, terminated | truncated)
@@ -179,6 +182,23 @@ class BodySchemaTrainer(BaseTrainer):
 			)
 			self.logger.log(train_metrics, step=self.timestep)
 
+	def _save_dpt_checkpoint(self) -> None:
+		"""Persist the DynamicsTransformer weights so finetuning can warm-start
+		the BSPPolicyNet from them.
+
+		The state_dict is written locally every call (cheap overwrite) and pushed
+		as a wandb artifact at the eval cadence to avoid creating an artifact
+		version on every training iteration.
+		"""
+		dynamics_transformer = self.dynamics_predictor.dynamics_predictor_module.dynamics_transformer
+
+		ckpt_dir = Path(self.cfg.log_dir) / 'checkpoints' / self.logger.run.id
+		ckpt_dir.mkdir(parents=True, exist_ok=True)
+		ckpt_path = ckpt_dir / 'dynamics_transformer.pth'
+		torch.save(dynamics_transformer.state_dict(), ckpt_path)
+
+		self.logger.log_artifact(ckpt_path, name='dynamics_transformer', type='model')
+
 	def train(self) -> None:
 		while self.collected_episodes < self.cfg.curiosity_pre_training.total_num_episodes:
 			# Collect Episodes
@@ -191,13 +211,15 @@ class BodySchemaTrainer(BaseTrainer):
 			# Train DynamicsTransfomer
 			with self.logger.timer('time/dpt_train_s', step=lambda: self.timestep):
 				self._train_dynamics_predictor()
+				self._save_dpt_checkpoint()
 
 			# Train Agent
 			with self.logger.timer('time/agent_train_s', step=lambda: self.timestep):
 				self._train_agent()
 
 			# Eval and Checkpointing
-			if self.collected_episodes % self.cfg.curiosity_pre_training.eval_every_episodes == 0:
+			if self.collected_episodes % self.cfg.curiosity_pre_training.eval_and_chkpt_cadence__in_episodes == 0:
 				self._eval()
-				self._save_checkpoint()
+				self._save_dpt_checkpoint()
+
 

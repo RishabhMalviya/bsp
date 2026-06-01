@@ -1,0 +1,9 @@
+# DynamicsTransformer architecture. Shared between curiosity pretraining and
+# task finetuning so the finetuned policy can warm-start from a pretrained
+# checkpoint with an identical architecture.
+d_model: 16
+embedder_hidden_dim: 32
+simnorm_dim: 4
+dim_feedforward: 64
+num_heads: 2
+num_layers: 2

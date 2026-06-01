@@ -1,7 +1,11 @@
 SESSION ?= bsp
 LOG ?= runs/bsp.log
 
-.PHONY: smoke small run
+.PHONY: test smoke small run
+
+test:
+	uv run python tests/test_finetuning_smoke.py
+	uv run python tests/test_config_smoke.py
 
 smoke:
 	HYDRA_FULL_ERROR=1 uv run python -m bsp.main \

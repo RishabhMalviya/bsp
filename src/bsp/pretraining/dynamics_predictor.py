@@ -13,15 +13,15 @@ device = get_device()
 
 
 class DynamicsPredictor():
-    def __init__(self, cfg: DictConfig, obs_dim, ac_dim, H_max):
+    def __init__(self, cfg: DictConfig, obs_dim, ac_dim, H_max, model_cfg: DictConfig):
         self.cfg = cfg
-        
+
         # Replay Buffer
         self.replay_buffer = ReplayBuffer(obs_dim, ac_dim, cfg.replay_buffer.capacity)
 
         self.dynamics_predictor_module = DynamicsPredictorModule(
             ac_dim=ac_dim, obs_dim=obs_dim, H_max=H_max,
-            **cfg.model,
+            **model_cfg, # pyright: ignore[reportCallIssue]
         ).to(device)
 
         self.optimizer = optim.Adam(self.dynamics_predictor_module.parameters(), lr=cfg.training.lr)

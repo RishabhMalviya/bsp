@@ -1,10 +1,10 @@
-total_num_episodes: 10_000
+total_num_episodes: 5_000
 num_collections_per_loop: 1
 dynamics_predictor_utd: 100
 curiosity_agent_utd: 10
 H_max: 16
 length_bias_k: 4.0
-eval_every_episodes: 2_500
+eval_every_episodes: 1_000
 
 dp_transformer:
   model:
@@ -29,7 +29,7 @@ curiosity_agent:
     hidden: 64
     depth: 2
     lr: 1e-4
-    entropy_coef: 1e-2
+    entropy_coef: 5e-3
     smoothness_coef: 1e-2             # final L2 penalty coef on the predicted action (control signal)
     smoothness_ramp_episodes: 10_000  # episodes to ramp smoothness_coef 0 -> final (set = total_num_episodes)
   critic:

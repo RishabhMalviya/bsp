@@ -219,4 +219,3 @@ class BodySchemaTrainer(BaseTrainer):
 			if self.collected_episodes % self.cfg.curiosity_pre_training.eval_interval == 0:
 				self._eval()
 				self._save_dpt_checkpoint()
-

@@ -6,6 +6,7 @@ LOG ?= runs/bsp.log
 test:
 	uv run python tests/test_finetuning_smoke.py
 	uv run python tests/test_config_smoke.py
+	MUJOCO_GL=egl uv run python tests/test_eval_video_smoke.py
 
 smoke:
 	HYDRA_FULL_ERROR=1 uv run python -m bsp.main \

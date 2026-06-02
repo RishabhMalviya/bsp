@@ -117,7 +117,7 @@ class Logger:
 def make_env(domain: str, task: str, max_timesteps: int, seed: int, render_mode: str | None = None) -> gym.Env:
     """DM-Control environment construction via Shimmy + Gymnasium."""
 
-    env = gym.make(f"dm_control/{domain}-{task}-v0", render_mode=render_mode, render_kwargs={'camera_id': 'tracking_cam', 'height': 640, 'width': 480})
+    env = gym.make(f"dm_control/{domain}-{task}-v0", render_mode=render_mode, render_kwargs={'camera_id': 'egocentric', 'height': 480, 'width': 640})
     env = gym.wrappers.FlattenObservation(env)
     env = gym.wrappers.TimeLimit(env, max_episode_steps=max_timesteps)
     env.reset(seed=seed)

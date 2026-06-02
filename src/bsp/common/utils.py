@@ -65,10 +65,12 @@ def _next_run_name(branch: str, counter_path: Path) -> str:
 class Logger:
     """Thin wrapper around wandb for logging scalar metrics."""
 
-    def __init__(self, cfg: DictConfig):
+    def __init__(self, cfg: DictConfig, name_prefix: str | None = None):
         name = cfg.wandb.name
         if name is None:
             name = _next_run_name(_get_git_branch(), Path(cfg.log_dir) / '.run_counter.json')
+        if name_prefix:
+            name = f"{name_prefix}-{name}"
 
         self.run = wandb.init(
             project=cfg.wandb.project,

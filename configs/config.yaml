@@ -12,3 +12,7 @@ log_dir: runs
 # Optional top-level override for the downstream task (e.g. `downstream_task=walk`).
 # When set, it overrides `env.downstream_task` for both pretraining eval and finetuning.
 downstream_task: null
+
+# Optional id of a pretraining run whose `dynamics_transformer.pth` checkpoint
+# should warm-start finetuning. When null, finetune.py uses the current run's id.
+pretraining_logger_run_id: null

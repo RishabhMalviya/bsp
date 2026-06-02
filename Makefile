@@ -23,21 +23,25 @@ small:
 	  curiosity_pre_training.total_num_episodes=50 \
 	  curiosity_pre_training.eval_every_episodes=25
 
-run:
+# PRETRAINING
+
+run-pretrain:
 	mkdir -p $(dir $(LOG))
-	tmux new-session -d -s $(SESSION) "HYDRA_FULL_ERROR=1 uv run python -m bsp.pretrain_and_finetune 2>&1 | tee $(LOG); exec bash"
+	tmux new-session -d -s $(SESSION) "HYDRA_FULL_ERROR=1 uv run python -m bsp.pretrain 2>&1 | tee $(LOG); exec bash"
 	@echo "Started in tmux session '$(SESSION)'."
 	@echo "  Attach:   tmux attach -t $(SESSION)"
 	@echo "  Tail log: tail -f $(LOG)"
 	@echo "  Kill:     tmux kill-session -t $(SESSION)"
 
-# Launch one run per downstream task, each in its own tmux session named
-# bsp-<task> and logging to runs/bsp-<task>.log.
+
+# FINE-TUNING
+pretraining_logger_run_id ?=
+
 run-tasks: run-stand run-walk run-run
 
 run-%:
 	mkdir -p runs
-	tmux new-session -d -s bsp-$* "HYDRA_FULL_ERROR=1 uv run python -m bsp.pretrain_and_finetune downstream_task=$* 2>&1 | tee runs/bsp-$*.log; exec bash"
+	tmux new-session -d -s bsp-$* "HYDRA_FULL_ERROR=1 uv run python -m bsp.finetune downstream_task=$* $(if $(pretraining_logger_run_id),pretraining_logger_run_id=$(pretraining_logger_run_id),) 2>&1 | tee runs/bsp-$*.log; exec bash"
 	@echo "Started downstream task '$*' in tmux session 'bsp-$*'."
 	@echo "  Attach:   tmux attach -t bsp-$*"
 	@echo "  Tail log: tail -f runs/bsp-$*.log"

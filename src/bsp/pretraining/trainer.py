@@ -218,7 +218,7 @@ class BodySchemaTrainer(BaseTrainer):
 				self._train_agent()
 
 			# Eval and Checkpointing
-			if self.collected_episodes % self.cfg.curiosity_pre_training.eval_and_chkpt_cadence__in_episodes == 0:
+			if self.collected_episodes % self.cfg.curiosity_pre_training.eval_interval == 0:
 				self._eval()
 				self._save_dpt_checkpoint()
 

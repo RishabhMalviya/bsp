@@ -1,8 +1,9 @@
 from collections import deque
+from pathlib import Path
 
 import gymnasium as gym
 import torch
-from omegaconf import DictConfig
+from omegaconf import DictConfig, open_dict
 
 from bsp.common.base_classes import BaseTrainer
 from bsp.finetuning.agent import BSPAgent
@@ -30,11 +31,17 @@ class TaskSpecificTrainer(BaseTrainer):
 		self.agent.actor.dynamics_transformer.load_state_dict(state_dict)
 		print(f"[finetuning] Loaded DynamicsTransformer weights from {checkpoint_path}")
 
-	def __init__(self, cfg, logger):
+	def __init__(self, cfg, logger, downstream_task: str | None = None):
 		self.cfg = cfg
 		self.logger = logger
 
 		set_seed(cfg.seed)
+
+		# An explicit downstream_task argument overrides the configured one.
+		if downstream_task is not None:
+			with open_dict(cfg):
+				cfg.env.downstream_task = downstream_task
+		self.downstream_task = cfg.env.downstream_task
 
 		self.timestep = 0
 		self.collected_episodes = 0
@@ -44,7 +51,7 @@ class TaskSpecificTrainer(BaseTrainer):
 		# the +H_max headroom accounts for windows lost to episode boundaries.
 		self.warmup = cfg.task_training.batch_size + self.H_max
 
-		self.env = make_env(cfg.env.domain, cfg.env.downstream_task, cfg.env.max_episode_timesteps, seed=cfg.seed)
+		self.env = make_env(cfg.env.domain, self.downstream_task, cfg.env.max_episode_timesteps, seed=cfg.seed)
 		obs_dim = gym.spaces.flatdim(self.env.observation_space)
 		ac_dim = gym.spaces.flatdim(self.env.action_space)
 
@@ -128,6 +135,22 @@ class TaskSpecificTrainer(BaseTrainer):
 			train_metrics = self.agent.update(batch)
 			self.logger.log(train_metrics, step=self.timestep)
 
+	def _save_dpt_checkpoint(self) -> None:
+		"""Persist the fine-tuned DynamicsTransformer weights.
+
+		The filename carries the downstream task as a suffix so checkpoints from
+		different finetuning tasks don't clobber each other. Mirrors the
+		pretraining trainer: write locally every call and push a wandb artifact.
+		"""
+		dynamics_transformer = self.agent.actor.dynamics_transformer
+
+		ckpt_dir = Path(self.cfg.log_dir) / 'checkpoints' / self.logger.run.id
+		ckpt_dir.mkdir(parents=True, exist_ok=True)
+		ckpt_path = ckpt_dir / f'dynamics_transformer_{self.downstream_task}.pth'
+		torch.save(dynamics_transformer.state_dict(), ckpt_path)
+
+		self.logger.log_artifact(ckpt_path, name=f'dynamics_transformer_{self.downstream_task}', type='model')
+
 	def train(self) -> None:
 		while self.collected_episodes < self.cfg.task_training.total_num_episodes:
 			# Collect Episodes
@@ -142,6 +165,7 @@ class TaskSpecificTrainer(BaseTrainer):
 			with self.logger.timer('time/agent_train_s', step=lambda: self.timestep):
 				self._train_agent()
 
-			# Eval
+			# Eval and Checkpointing
 			if self.collected_episodes % self.cfg.task_training.eval_interval == 0:
 				self._eval()
+				self._save_dpt_checkpoint()

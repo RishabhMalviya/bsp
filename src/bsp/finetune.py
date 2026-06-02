@@ -18,13 +18,9 @@ from bsp.finetuning.trainer import TaskSpecificTrainer
 def main(cfg: DictConfig) -> None:
     set_seed(cfg.seed)
 
-    if cfg.get('downstream_task') is not None:  # Can be overriden from CLI with `downstream_task=<task>`
-        with open_dict(cfg):
-            cfg.env.downstream_task = cfg.downstream_task
 
-    logger = Logger(cfg, name_prefix=cfg.env.downstream_task)
-
-    pretraining_logger_run_id = cfg.get('pretraining_logger_run_id') or logger.run.id  # Can be overriden from CLI with `pretraining_logger_run_id=<run_id>`
+    # Check for Pretraining Checkpoint File
+    pretraining_logger_run_id = cfg.get('pretraining_logger_run_id')  # Can be overriden from CLI with `pretraining_logger_run_id=<run_id>`
     ckpt_path = Path(cfg.log_dir) / 'checkpoints' / pretraining_logger_run_id / 'dynamics_transformer.pth'
     if not ckpt_path.exists():
         raise FileNotFoundError(f"""Checkpoint file not found at {ckpt_path}. \
@@ -32,6 +28,14 @@ def main(cfg: DictConfig) -> None:
                                 """)
     with open_dict(cfg):
         cfg.task_training.dpt_checkpoint_path = str(ckpt_path)
+
+
+    # Setup Logger
+    if cfg.get('downstream_task') is not None:  # Can be overriden from CLI with `downstream_task=<task>`
+        with open_dict(cfg):
+            cfg.env.downstream_task = cfg.downstream_task
+    logger = Logger(cfg, name_prefix=cfg.env.downstream_task)
+
 
     try:
         finetuner = TaskSpecificTrainer(cfg, logger)

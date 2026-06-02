@@ -8,3 +8,7 @@ defaults:
 
 seed: 0
 log_dir: runs
+
+# Optional top-level override for the downstream task (e.g. `downstream_task=walk`).
+# When set, it overrides `env.downstream_task` for both pretraining eval and finetuning.
+downstream_task: null

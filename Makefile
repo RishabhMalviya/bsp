@@ -1,7 +1,7 @@
 SESSION ?= bsp
 LOG ?= runs/bsp.log
 
-.PHONY: test smoke small run
+.PHONY: test smoke small run run-tasks run-%
 
 test:
 	uv run python tests/test_finetuning_smoke.py
@@ -30,3 +30,15 @@ run:
 	@echo "  Attach:   tmux attach -t $(SESSION)"
 	@echo "  Tail log: tail -f $(LOG)"
 	@echo "  Kill:     tmux kill-session -t $(SESSION)"
+
+# Launch one run per downstream task, each in its own tmux session named
+# bsp-<task> and logging to runs/bsp-<task>.log.
+run-tasks: run-stand run-walk run-run
+
+run-%:
+	mkdir -p runs
+	tmux new-session -d -s bsp-$* "HYDRA_FULL_ERROR=1 uv run python -m bsp.main downstream_task=$* 2>&1 | tee runs/bsp-$*.log; exec bash"
+	@echo "Started downstream task '$*' in tmux session 'bsp-$*'."
+	@echo "  Attach:   tmux attach -t bsp-$*"
+	@echo "  Tail log: tail -f runs/bsp-$*.log"
+	@echo "  Kill:     tmux kill-session -t bsp-$*"

@@ -19,6 +19,12 @@ from bsp.finetuning.trainer import TaskSpecificTrainer
 def main(cfg: DictConfig) -> None:
     set_seed(cfg.seed)
 
+    # Allow a top-level `downstream_task=<task>` CLI override to take precedence
+    # over the value configured under `env`.
+    if cfg.get('downstream_task') is not None:
+        with open_dict(cfg):
+            cfg.env.downstream_task = cfg.downstream_task
+
     logger = Logger(cfg)
 
     try:

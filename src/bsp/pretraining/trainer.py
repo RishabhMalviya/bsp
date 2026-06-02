@@ -81,8 +81,8 @@ class BodySchemaTrainer(BaseTrainer):
 		frames = [self.eval_env.render()]
 		done = False
 		while not done:
-			action = self.agent.act(obs, deterministic=True)
-			if isinstance(action, torch.Tensor): action = action.detach().cpu().numpy()
+			with torch.no_grad():
+				action = self.agent.act(obs, deterministic=True).detach().cpu().numpy()
 			obs, _, terminated, truncated, _ = self.eval_env.step(action)
 
 			frames.append(self.eval_env.render())  # pyright: ignore[reportCallIssue]

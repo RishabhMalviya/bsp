@@ -56,7 +56,7 @@ class TaskSpecificTrainer(BaseTrainer):
 		self.env = make_env(cfg.env.domain, self.downstream_task, cfg.env.max_episode_timesteps, seed=cfg.seed)
 		obs_dim = gym.spaces.flatdim(self.env.observation_space)
 		ac_dim = gym.spaces.flatdim(self.env.action_space)
-		self.eval_env = make_env(cfg.env.domain, self.downstream_task, cfg.env.max_episode_timesteps, seed=cfg.seed + 999)
+		self.eval_env = make_env(cfg.env.domain, self.downstream_task, cfg.env.max_episode_timesteps, seed=cfg.seed + 999, render_mode="rgb_array")
 
 		self.agent = BSPAgent(cfg, obs_dim, ac_dim, downstream_task=self.downstream_task)
 		self._load_dpt_checkpoint(cfg.task_training.dpt_checkpoint_path)
@@ -76,7 +76,8 @@ class TaskSpecificTrainer(BaseTrainer):
 			done = False
 			while not done:
 				obs_history.append(obs)
-				action = self.agent.act(obs_history, deterministic=True).detach().cpu().numpy()
+				with torch.no_grad():
+					action = self.agent.act(obs_history, deterministic=True).detach().cpu().numpy()
 				obs, reward, terminated, truncated, info = self.env.step(action)
 				
 				episode_return += float(reward)
@@ -102,7 +103,8 @@ class TaskSpecificTrainer(BaseTrainer):
 		done = False
 		while not done:
 			obs_history.append(obs)
-			action = self.agent.act(obs, deterministic=True).detach().cpu().numpy()
+			with torch.no_grad():
+				action = self.agent.act(obs_history, deterministic=True).detach().cpu().numpy()
 			obs, _, terminated, truncated, _ = self.eval_env.step(action)
 
 			frames.append(self.eval_env.render())  # pyright: ignore[reportCallIssue]

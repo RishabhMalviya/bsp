@@ -195,6 +195,10 @@ class BodySchemaTrainer(BaseTrainer):
 		ckpt_path = ckpt_dir / 'dynamics_transformer.pth'
 		torch.save(dynamics_transformer.state_dict(), ckpt_path)
 
+	def _log_dpt_artifact_final(self):
+		ckpt_dir = Path(self.cfg.log_dir) / 'checkpoints' / self.logger.run.id
+		ckpt_path = ckpt_dir / 'dynamics_transformer.pth'
+
 		self.logger.log_artifact(ckpt_path, name='dynamics_transformer', type='model')
 
 	def train(self) -> None:
@@ -219,3 +223,5 @@ class BodySchemaTrainer(BaseTrainer):
 			if self.collected_episodes % self.cfg.curiosity_pre_training.eval_interval == 0:
 				self._eval()
 				self._save_dpt_checkpoint()
+		
+		self._log_dpt_artifact_final()

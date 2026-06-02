@@ -149,6 +149,10 @@ class TaskSpecificTrainer(BaseTrainer):
 		ckpt_path = ckpt_dir / f'dynamics_transformer_{self.downstream_task}.pth'
 		torch.save(dynamics_transformer.state_dict(), ckpt_path)
 
+	def _log_dpt_artifact_final(self):
+		ckpt_dir = Path(self.cfg.log_dir) / 'checkpoints' / self.logger.run.id
+		ckpt_path = ckpt_dir / f'dynamics_transformer_{self.downstream_task}.pth'
+
 		self.logger.log_artifact(ckpt_path, name=f'dynamics_transformer_{self.downstream_task}', type='model')
 
 	def train(self) -> None:
@@ -169,3 +173,5 @@ class TaskSpecificTrainer(BaseTrainer):
 			if self.collected_episodes % self.cfg.task_training.eval_interval == 0:
 				self._eval()
 				self._save_dpt_checkpoint()
+		
+		self._log_dpt_artifact_final()

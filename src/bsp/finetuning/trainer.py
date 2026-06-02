@@ -55,7 +55,7 @@ class TaskSpecificTrainer(BaseTrainer):
 		obs_dim = gym.spaces.flatdim(self.env.observation_space)
 		ac_dim = gym.spaces.flatdim(self.env.action_space)
 
-		self.agent = BSPAgent(cfg, obs_dim, ac_dim)
+		self.agent = BSPAgent(cfg, obs_dim, ac_dim, downstream_task=self.downstream_task)
 		self._load_dpt_checkpoint(cfg.task_training.dpt_checkpoint_path)
 		self.obs_history = deque(maxlen=cfg.task_training.H_max)
 
@@ -77,7 +77,7 @@ class TaskSpecificTrainer(BaseTrainer):
 			eval_returns.append(episode_return)
 
 		avg_return = sum(eval_returns) / len(eval_returns)
-		self.logger.log({'Eval Average Return': avg_return}, step=self.timestep)
+		self.logger.log({f'{self.downstream_task} Eval Average Return': avg_return}, step=self.timestep)
 
 	def _collect_episodes(self) -> None:
 		self.agent.to_cpu()  # Keep the agent on CPU during collection to avoid GPU-CPU data transfer overhead

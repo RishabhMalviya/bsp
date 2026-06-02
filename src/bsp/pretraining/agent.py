@@ -118,7 +118,7 @@ class CuriosityAgent(BaseAgent):
 
         critic_pred = self.critic_local(torch.cat([obs, actions], dim=-1)).squeeze(-1)
         critic_loss = F.mse_loss(critic_pred, td_target)
-        metrics['critic_loss'] = critic_loss.item()
+        metrics['curiosity_agent_critic_loss'] = critic_loss.item()
 
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
@@ -137,7 +137,7 @@ class CuriosityAgent(BaseAgent):
 
         actor_loss = actions_value_loss + (entropy_coef * entropy_loss) + (smoothness_coef * smoothness_loss)
 
-        metrics['actor_loss'] = actor_loss.item()
+        metrics['curiosity_agent_actor_loss'] = actor_loss.item()
         # metrics['actions_value_loss'] = actions_value_loss.item()
         # metrics['actor_entropy_loss'] = entropy_loss.item()
         # metrics['actor_smoothness_loss'] = smoothness_loss.item()

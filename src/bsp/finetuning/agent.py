@@ -23,9 +23,10 @@ device = get_device()
 
 
 class BSPAgent(BaseAgent):
-    def __init__(self, cfg: DictConfig, obs_dim: int, ac_dim: int):
+    def __init__(self, cfg: DictConfig, obs_dim: int, ac_dim: int, downstream_task: str | None = None):
         self.cfg = cfg
         self.device = device
+        self.downstream_task = downstream_task
 
         self.obs_dim = obs_dim
         self.ac_dim = ac_dim
@@ -166,7 +167,7 @@ class BSPAgent(BaseAgent):
 
         critic_pred = self.critic_local(torch.cat([obs, action], dim=-1)).squeeze(-1)
         critic_loss = F.mse_loss(critic_pred, td_target)
-        metrics['critic_loss'] = critic_loss.item()
+        metrics[f'{self.downstream_task}_critic_loss'] = critic_loss.item()
 
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
@@ -189,10 +190,10 @@ class BSPAgent(BaseAgent):
             + (tt.actor.smoothness_coef * smoothness_loss)
         )
 
-        metrics['actor_loss'] = actor_loss.item()
-        # metrics['actions_value_loss'] = actions_value_loss.item()
-        # metrics['actor_entropy'] = entropy_loss.item()
-        # metrics['actor_smoothness_loss'] = smoothness_loss.item()
+        metrics[f'{self.downstream_task}_actor_loss'] = actor_loss.item()
+        # metrics[f'{self.downstream_task}_actions_value_loss'] = actions_value_loss.item()
+        # metrics[f'{self.downstream_task}_actor_entropy'] = entropy_loss.item()
+        # metrics[f'{self.downstream_task}_actor_smoothness_loss'] = smoothness_loss.item()
 
         self.actor_optimizer.zero_grad()
         actor_loss.backward()

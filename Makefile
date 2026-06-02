@@ -9,7 +9,7 @@ test:
 	MUJOCO_GL=egl uv run python tests/test_eval_video_smoke.py
 
 smoke:
-	HYDRA_FULL_ERROR=1 uv run python -m bsp.main \
+	HYDRA_FULL_ERROR=1 uv run python -m bsp.pretrain_and_finetune \
 	  curiosity_pre_training.total_num_episodes=4 \
 	  curiosity_pre_training.num_collections_per_loop=1 \
 	  curiosity_pre_training.dynamics_predictor_utd=1 \
@@ -19,13 +19,13 @@ smoke:
 	  wandb.mode=disabled
 
 small:
-	HYDRA_FULL_ERROR=1 uv run python -m bsp.main \
+	HYDRA_FULL_ERROR=1 uv run python -m bsp.pretrain_and_finetune \
 	  curiosity_pre_training.total_num_episodes=50 \
 	  curiosity_pre_training.eval_every_episodes=25
 
 run:
 	mkdir -p $(dir $(LOG))
-	tmux new-session -d -s $(SESSION) "HYDRA_FULL_ERROR=1 uv run python -m bsp.main 2>&1 | tee $(LOG); exec bash"
+	tmux new-session -d -s $(SESSION) "HYDRA_FULL_ERROR=1 uv run python -m bsp.pretrain_and_finetune 2>&1 | tee $(LOG); exec bash"
 	@echo "Started in tmux session '$(SESSION)'."
 	@echo "  Attach:   tmux attach -t $(SESSION)"
 	@echo "  Tail log: tail -f $(LOG)"
@@ -37,7 +37,7 @@ run-tasks: run-stand run-walk run-run
 
 run-%:
 	mkdir -p runs
-	tmux new-session -d -s bsp-$* "HYDRA_FULL_ERROR=1 uv run python -m bsp.main downstream_task=$* 2>&1 | tee runs/bsp-$*.log; exec bash"
+	tmux new-session -d -s bsp-$* "HYDRA_FULL_ERROR=1 uv run python -m bsp.pretrain_and_finetune downstream_task=$* 2>&1 | tee runs/bsp-$*.log; exec bash"
 	@echo "Started downstream task '$*' in tmux session 'bsp-$*'."
 	@echo "  Attach:   tmux attach -t bsp-$*"
 	@echo "  Tail log: tail -f runs/bsp-$*.log"

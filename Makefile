@@ -33,7 +33,7 @@ pretrain-full:
 pretraining_logger_run_id ?=
 
 finetune-stand-small:
-	HYDRA_FULL_ERROR=1 uv run python -m bsp.finetune \
+	HYDRA_FULL_ERROR=1 uv run python -m bsp.finetune $(if $(pretraining_logger_run_id),pretraining_logger_run_id=$(pretraining_logger_run_id),) \
 	  task_training.total_num_episodes=4 \
 	  task_training.eval_interval=2 \
 	  task_training.utd=1 \

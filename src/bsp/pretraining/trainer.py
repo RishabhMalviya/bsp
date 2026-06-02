@@ -16,8 +16,6 @@ from bsp.common.utils import make_env, sample_seq_length, set_seed
 
 
 class BodySchemaTrainer(BaseTrainer):
-	"""Base trainer class for TD-MPC2."""
-
 	def __init__(self, cfg: DictConfig, logger):
 		set_seed(cfg.seed)
 
@@ -83,7 +81,7 @@ class BodySchemaTrainer(BaseTrainer):
 			if isinstance(action, torch.Tensor):
 				action = action.detach().cpu().numpy()
 			obs, reward, terminated, truncated, _ = self.eval_env.step(action)
-			frames.append(self.eval_env.render(camera_id=0))  # pyright: ignore[reportCallIssue]
+			frames.append(self.eval_env.render())  # pyright: ignore[reportCallIssue]
 			episode_return += float(reward)
 			done = terminated or truncated
 
@@ -221,5 +219,4 @@ class BodySchemaTrainer(BaseTrainer):
 			if self.collected_episodes % self.cfg.curiosity_pre_training.eval_interval == 0:
 				self._eval()
 				self._save_dpt_checkpoint()
-
 

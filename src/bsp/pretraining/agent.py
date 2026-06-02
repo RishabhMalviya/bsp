@@ -77,6 +77,8 @@ class CuriosityAgent(BaseAgent):
 
         return distributions.Normal(action_mean, action_std)
 
+    def _sample_from(self, action_distribution: distributions.Distribution) -> torch.Tensor:
+        return torch.clamp(input=action_distribution.rsample(), min=-1.0, max=1.0)
 
     def act(self, obs: torch.Tensor | np.ndarray, deterministic: bool = False, temperature: float = 1.0) -> torch.Tensor:
         if isinstance(obs, np.ndarray):
@@ -86,7 +88,7 @@ class CuriosityAgent(BaseAgent):
         if deterministic:
             return action_dist.mean
         else:
-            return action_dist.rsample()
+            return self._sample_from(action_dist)
 
 
     def update(self, batch: tuple[torch.Tensor, ...], entropy_coef: float = 0.0, smoothness_coef: float = 0.0) -> dict[str, float]:
@@ -123,18 +125,21 @@ class CuriosityAgent(BaseAgent):
         self.critic_optimizer.step()
 
         # Train Actor
-        pi_dist = self._get_action_distribution(obs)
-        pi_actions = pi_dist.rsample()
+        actions_dist = self._get_action_distribution(obs)
+        actions_sample = self._sample_from(actions_dist)
 
-        actions_value_loss = -self.critic_target(torch.cat([obs, pi_actions], dim=-1)).mean()
-        entropy_loss = -pi_dist.entropy().sum(-1).mean()
-        smoothness_loss = pi_actions.pow(2).sum(-1).mean()  # L2 penalty on control signal magnitude
+        next_actions_dist = self._get_action_distribution(next_obs)
+        next_actions_sample = self._sample_from(next_actions_dist)
+
+        actions_value_loss = -self.critic_target(torch.cat([obs, actions_sample], dim=-1)).mean()
+        entropy_loss = -actions_dist.entropy().sum(-1).mean()
+        smoothness_loss = (actions_sample - next_actions_sample).pow(2).sum(-1).mean()  # L2 norm difference between consecutive actions
 
         actor_loss = actions_value_loss + (entropy_coef * entropy_loss) + (smoothness_coef * smoothness_loss)
 
         metrics['actor_loss'] = actor_loss.item()
         # metrics['actions_value_loss'] = actions_value_loss.item()
-        # metrics['actor_entropy'] = entropy_loss.item()
+        # metrics['actor_entropy_loss'] = entropy_loss.item()
         # metrics['actor_smoothness_loss'] = smoothness_loss.item()
 
         self.actor_optimizer.zero_grad()

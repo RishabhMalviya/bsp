@@ -23,7 +23,7 @@ curiosity_agent:
     hidden: 64
     depth: 2
     lr: 1e-4
-    entropy_coef: 1e-2
+    entropy_coef: 5e-3
     smoothness_coef: 1e-2             # final L2 penalty coef on the predicted action (control signal)
     smoothness_ramp_episodes: 10_000  # episodes to ramp smoothness_coef 0 -> final (set = total_num_episodes)
   critic:

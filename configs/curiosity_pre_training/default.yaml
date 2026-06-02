@@ -4,7 +4,8 @@ dynamics_predictor_utd: 100
 curiosity_agent_utd: 10
 H_max: 16
 length_bias_k: 4.0
-eval_interval: 2_500  # episodes
+video_interval: 2_500  # episodes
+ckpt_interval: 2_500  # episodes
 
 dp_transformer:
   # Architecture (model) params now live in the shared `dp_transformer` config group.

@@ -1,8 +1,10 @@
 from collections import deque
 from pathlib import Path
 
-import gymnasium as gym
 import torch
+import wandb
+import numpy as np
+import gymnasium as gym
 from omegaconf import DictConfig, open_dict
 
 from bsp.common.base_classes import BaseTrainer
@@ -54,6 +56,7 @@ class TaskSpecificTrainer(BaseTrainer):
 		self.env = make_env(cfg.env.domain, self.downstream_task, cfg.env.max_episode_timesteps, seed=cfg.seed)
 		obs_dim = gym.spaces.flatdim(self.env.observation_space)
 		ac_dim = gym.spaces.flatdim(self.env.action_space)
+		self.eval_env = make_env(cfg.env.domain, self.downstream_task, cfg.env.max_episode_timesteps, seed=cfg.seed + 999)
 
 		self.agent = BSPAgent(cfg, obs_dim, ac_dim, downstream_task=self.downstream_task)
 		self._load_dpt_checkpoint(cfg.task_training.dpt_checkpoint_path)
@@ -61,6 +64,9 @@ class TaskSpecificTrainer(BaseTrainer):
 
 	def _eval(self) -> None:
 		"""Run deterministic eval episodes and log the average return."""
+		self.agent.to_cpu()  # Run the eval episode on CPU to avoid GPU-CPU data transfer overhead
+		self.agent.actor.eval()  # Set the policy to eval mode (affects any dropout/batchnorm, though we don't use those in this implementation)
+
 		eval_returns = []
 
 		for episode in range(self.cfg.task_training.eval_num_episodes):
@@ -72,12 +78,46 @@ class TaskSpecificTrainer(BaseTrainer):
 				obs_history.append(obs)
 				action = self.agent.act(obs_history, deterministic=True).detach().cpu().numpy()
 				obs, reward, terminated, truncated, info = self.env.step(action)
+				
 				episode_return += float(reward)
 				done = terminated or truncated
 			eval_returns.append(episode_return)
 
 		avg_return = sum(eval_returns) / len(eval_returns)
 		self.logger.log({f'{self.downstream_task} Eval Average Return': avg_return}, step=self.timestep)
+
+		self.agent.to_device()  # Move the agent back to the training device
+		self.agent.actor.train()  # Set the policy back to train mode
+	
+	def _video(self) -> None:
+		"""
+			Run a single deterministic eval episode, log return and an RGB video.
+		"""
+		self.agent.to_cpu()  # Run the eval episode on CPU to avoid GPU-CPU data transfer overhead
+		self.agent.actor.eval()  # Set the policy to eval mode (affects any dropout/batchnorm, though we don't use those in this implementation)
+
+		obs_history = deque(maxlen=self.cfg.task_training.H_max)
+		obs, _ = self.eval_env.reset(seed=self.cfg.seed)
+		frames = [self.eval_env.render()]
+		done = False
+		while not done:
+			obs_history.append(obs)
+			action = self.agent.act(obs, deterministic=True).detach().cpu().numpy()
+			obs, _, terminated, truncated, _ = self.eval_env.step(action)
+
+			frames.append(self.eval_env.render())  # pyright: ignore[reportCallIssue]
+			done = terminated or truncated
+		video = np.stack(frames).transpose(0, 3, 1, 2)  # pyright: ignore[reportCallIssue, reportArgumentType]
+		self.logger.log(
+			{
+				# 'Eval Return': episode_return,
+				'Eval Video': wandb.Video(video, fps=30, format='mp4'),
+			},
+			step=self.timestep,
+		)
+
+		self.agent.to_device()  # Move the agent back to the training device
+		self.agent.actor.train()  # Set the policy back to train mode
 
 	def _collect_episodes(self) -> None:
 		self.agent.to_cpu()  # Keep the agent on CPU during collection to avoid GPU-CPU data transfer overhead
@@ -172,6 +212,9 @@ class TaskSpecificTrainer(BaseTrainer):
 			# Eval and Checkpointing
 			if self.collected_episodes % self.cfg.task_training.eval_interval == 0:
 				self._eval()
+			if self.collected_episodes % self.cfg.task_training.video_interval == 0:
+				self._video()
+			if self.collected_episodes % self.cfg.task_training.ckpt_interval == 0:
 				self._save_dpt_checkpoint()
 		
 		self._log_dpt_artifact_final()

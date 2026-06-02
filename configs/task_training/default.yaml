@@ -4,7 +4,9 @@ num_collections_per_loop: 1
 utd: 10
 batch_size: 512
 H_max: 16
-eval_interval: 1_000      # in collected episodes
+video_interval: 2_500      # in collected episodes
+ckpt_interval: 2_500      # in collected episodes
+eval_interval: 100      # in collected episodes
 eval_num_episodes: 5
 
 # Path to a pretrained `dynamics_transformer.pth` to warm-start the policy.

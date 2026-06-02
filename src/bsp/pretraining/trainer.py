@@ -69,20 +69,23 @@ class BodySchemaTrainer(BaseTrainer):
 		self.dynamics_predictor = DynamicsPredictor(self.dpt_cfg, obs_dim, ac_dim, H_max=self.H_max, model_cfg=self.dpt_model_cfg)
 
 	def _eval(self) -> None:
+		self._video()
+
+	def _video(self) -> None:
 		"""
 			Run a single deterministic eval episode, log return and an RGB video.
 		"""
+		self.agent.to_cpu()  # Run the eval episode on CPU to avoid GPU-CPU data transfer overhead
+
 		obs, _ = self.eval_env.reset(seed=self.cfg.seed)
 		frames = [self.eval_env.render()]
-		episode_return = 0.0
 		done = False
 		while not done:
 			action = self.agent.act(obs, deterministic=True)
-			if isinstance(action, torch.Tensor):
-				action = action.detach().cpu().numpy()
-			obs, reward, terminated, truncated, _ = self.eval_env.step(action)
+			if isinstance(action, torch.Tensor): action = action.detach().cpu().numpy()
+			obs, _, terminated, truncated, _ = self.eval_env.step(action)
+
 			frames.append(self.eval_env.render())  # pyright: ignore[reportCallIssue]
-			episode_return += float(reward)
 			done = terminated or truncated
 
 		video = np.stack(frames).transpose(0, 3, 1, 2)  # pyright: ignore[reportCallIssue, reportArgumentType]
@@ -93,6 +96,8 @@ class BodySchemaTrainer(BaseTrainer):
 			},
 			step=self.timestep,
 		)
+
+		self.agent.to_device()  # Move the agent back to the training device
 
 	def _prep_agent_training_batch(self):
 		"""
@@ -220,8 +225,9 @@ class BodySchemaTrainer(BaseTrainer):
 				self._train_agent()
 
 			# Eval and Checkpointing
-			if self.collected_episodes % self.cfg.curiosity_pre_training.eval_interval == 0:
-				self._eval()
+			if self.collected_episodes % self.cfg.curiosity_pre_training.video_interval == 0:
+				self._video()
+			if self.collected_episodes % self.cfg.curiosity_pre_training.ckpt_interval == 0:
 				self._save_dpt_checkpoint()
 		
 		self._log_dpt_artifact_final()

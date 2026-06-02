@@ -65,10 +65,12 @@ def _next_run_name(branch: str, counter_path: Path) -> str:
 class Logger:
     """Thin wrapper around wandb for logging scalar metrics."""
 
-    def __init__(self, cfg: DictConfig):
+    def __init__(self, cfg: DictConfig, name_prefix: str | None = None):
         name = cfg.wandb.name
         if name is None:
             name = _next_run_name(_get_git_branch(), Path(cfg.log_dir) / '.run_counter.json')
+        if name_prefix:
+            name = f"{name_prefix}-{name}"
 
         self.run = wandb.init(
             project=cfg.wandb.project,
@@ -88,6 +90,12 @@ class Logger:
 
     def log(self, metrics: dict, step: int | None = None) -> None:
         wandb.log(metrics, step=step)
+
+    def log_artifact(self, path: str | Path, name: str, type: str = 'model') -> None:
+        """Log a local file as a versioned wandb artifact tied to this run."""
+        artifact = wandb.Artifact(name=name, type=type)
+        artifact.add_file(str(path))
+        self.run.log_artifact(artifact)
 
     @contextlib.contextmanager
     def timer(self, key: str, step=None):
@@ -111,7 +119,7 @@ class Logger:
 def make_env(domain: str, task: str, max_timesteps: int, seed: int, render_mode: str | None = None) -> gym.Env:
     """DM-Control environment construction via Shimmy + Gymnasium."""
 
-    env = gym.make(f"dm_control/{domain}-{task}-v0", render_mode=render_mode)
+    env = gym.make(f"dm_control/{domain}-{task}-v0", render_mode=render_mode, render_kwargs={'camera_id': 'side', 'height': 480, 'width': 640})
     env = gym.wrappers.FlattenObservation(env)
     env = gym.wrappers.TimeLimit(env, max_episode_steps=max_timesteps)
     env.reset(seed=seed)

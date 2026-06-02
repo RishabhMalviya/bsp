@@ -77,6 +77,8 @@ class CuriosityAgent(BaseAgent):
 
         return distributions.Normal(action_mean, action_std)
 
+    def _sample_from(self, action_distribution: distributions.Distribution) -> torch.Tensor:
+        return torch.clamp(input=action_distribution.rsample(), min=-1.0, max=1.0)
 
     def act(self, obs: torch.Tensor | np.ndarray, deterministic: bool = False, temperature: float = 1.0) -> torch.Tensor:
         if isinstance(obs, np.ndarray):
@@ -86,15 +88,20 @@ class CuriosityAgent(BaseAgent):
         if deterministic:
             return action_dist.mean
         else:
-            return action_dist.rsample()
+            return self._sample_from(action_dist)
 
 
-    def update(self, batch: tuple[torch.Tensor, ...]) -> dict[str, float]:
+    def update(self, batch: tuple[torch.Tensor, ...], entropy_coef: float = 0.0, smoothness_coef: float = 0.0) -> dict[str, float]:
         """
             Update the agent's actor and critic networks using a batch of experiences.
             Expects batch = (obs, actions, rewards, next_obs, dones) where rewards
             are intrinsic rewards from the dynamics predictor and dones are
             (terminated | truncated) as floats.
+
+            `entropy_coef` weights the policy entropy bonus in the actor loss.
+            `smoothness_coef` weights an L2 penalty on the predicted action
+            magnitude (control signal), encouraging movement smoothness. It is
+            phased in over training via a schedule owned by the trainer.
         """
         def _soft_update(local_model, target_model, tau):
             for target_param, local_param in zip(target_model.parameters(), local_model.parameters()):
@@ -111,31 +118,40 @@ class CuriosityAgent(BaseAgent):
 
         critic_pred = self.critic_local(torch.cat([obs, actions], dim=-1)).squeeze(-1)
         critic_loss = F.mse_loss(critic_pred, td_target)
-        metrics['critic_loss'] = critic_loss.item()
+        metrics['curiosity_agent_critic_loss'] = critic_loss.item()
 
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
         self.critic_optimizer.step()
 
         # Train Actor
-        pi_dist = self._get_action_distribution(obs)
-        pi_actions = pi_dist.rsample()
-        actions_value = self.critic_target(torch.cat([obs, pi_actions], dim=-1))
-        entropy = pi_dist.entropy().sum(-1).mean()
-        actor_loss = -actions_value.mean()  # - self.cfg.actor.entropy_coef*entropy
-        metrics['actor_loss'] = actor_loss.item()
-        metrics['actor_entropy'] = entropy.item()
+        actions_dist = self._get_action_distribution(obs)
+        actions_sample = self._sample_from(actions_dist)
+
+        next_actions_dist = self._get_action_distribution(next_obs)
+        next_actions_sample = self._sample_from(next_actions_dist)
+
+        actions_value_loss = -self.critic_target(torch.cat([obs, actions_sample], dim=-1)).mean()
+        entropy_loss = -actions_dist.entropy().sum(-1).mean()
+        smoothness_loss = (actions_sample - next_actions_sample).pow(2).sum(-1).mean()  # L2 norm difference between consecutive actions
+
+        actor_loss = actions_value_loss + (entropy_coef * entropy_loss) + (smoothness_coef * smoothness_loss)
+
+        metrics['curiosity_agent_actor_loss'] = actor_loss.item()
+        # metrics['actions_value_loss'] = actions_value_loss.item()
+        # metrics['actor_entropy_loss'] = entropy_loss.item()
+        # metrics['actor_smoothness_loss'] = smoothness_loss.item()
 
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
 
-        if self.logstd.grad is not None:
-            metrics['logstd_grad'] = _safe_histogram(self.logstd.grad)
+        # if self.logstd.grad is not None:
+        #     metrics['logstd_grad'] = _safe_histogram(self.logstd.grad)
 
         self.actor_optimizer.step()
 
-        with torch.no_grad():
-            metrics['logstd'] = _safe_histogram(self.logstd, num_bins=128, min_range=1e-4)
+        # with torch.no_grad():
+        #     metrics['logstd'] = _safe_histogram(self.logstd, num_bins=128, min_range=1e-4)
 
         # Soft Update Target Networks
         _soft_update(self.critic_local, self.critic_target, self.cfg.critic.tau)

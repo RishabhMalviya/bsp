@@ -9,8 +9,8 @@ dist/
 
 # Virtual envs
 .venv/
-venv/
-env/
+/venv/
+/env/
 
 # Jupyter
 .ipynb_checkpoints/
@@ -28,7 +28,7 @@ env/
 runs/
 logs/
 checkpoints/
-wandb/
+/wandb/
 outputs/
 *.pt
 *.ckpt
@@ -38,3 +38,4 @@ outputs/
 data/*
 !data/*.sh
 !data/*.ipynb
+

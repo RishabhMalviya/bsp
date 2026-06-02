@@ -1,0 +1,5 @@
+project: bsp
+entity: null
+name: null
+group: null
+mode: online  # online | offline | disabled

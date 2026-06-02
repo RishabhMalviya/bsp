@@ -5,6 +5,8 @@ Hydra parses the YAML config from `configs/` and applies any CLI overrides
 with `--config-name=<name>`.
 """
 
+from pathlib import Path
+
 import hydra
 from omegaconf import DictConfig
 
@@ -16,11 +18,11 @@ from bsp.pretraining.trainer import BodySchemaTrainer
 def main(cfg: DictConfig) -> None:
     set_seed(cfg.seed)
 
-    logger = Logger(cfg)
-    trainer = BodySchemaTrainer(cfg, logger)
+    logger = Logger(cfg, name_prefix='pretraining')
 
     try:
-        trainer.train()
+        pretrainer = BodySchemaTrainer(cfg, logger)
+        pretrainer.train()
     finally:
         logger.finish()
 

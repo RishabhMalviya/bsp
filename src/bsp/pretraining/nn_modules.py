@@ -129,7 +129,7 @@ class CuriosityPolicyNet(MLP):
 
     def forward(self, obs: torch.Tensor) -> torch.Tensor:
         ac = super().forward(obs)
-        ac = torch.tanh(ac)
+        ac = torch.tanh(ac)        
 
         return ac
 

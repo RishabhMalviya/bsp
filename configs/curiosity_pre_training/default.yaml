@@ -1,22 +1,16 @@
 total_num_episodes: 10_000
 num_collections_per_loop: 1
-dynamics_predictor_utd: 10
+dynamics_predictor_utd: 100
 curiosity_agent_utd: 10
 H_max: 16
 length_bias_k: 4.0
-eval_every_episodes: 2_500
+eval_interval: 2_500  # episodes
 
 dp_transformer:
-  model:
-    d_model: 16
-    embedder_hidden_dim: 32
-    simnorm_dim: 4
-    dim_feedforward: 64
-    num_heads: 2
-    num_layers: 2
+  # Architecture (model) params now live in the shared `dp_transformer` config group.
   training:
     lr: 1e-4
-    batch_size: 512
+    batch_size: 1024
   replay_buffer:
     capacity: 100_000
 
@@ -29,7 +23,9 @@ curiosity_agent:
     hidden: 64
     depth: 2
     lr: 1e-4
-    entropy_coef: 1e-2
+    entropy_coef: 5e-3
+    smoothness_coef: 1e-2             # final L2 penalty coef on the predicted action (control signal)
+    smoothness_ramp_episodes: 10_000  # episodes to ramp smoothness_coef 0 -> final (set = total_num_episodes)
   critic:
     hidden: 64
     depth: 2

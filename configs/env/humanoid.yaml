@@ -1,0 +1,7 @@
+domain: humanoid
+pretraining_tasks:
+- stand
+- walk
+- run
+downstream_task: stand
+max_episode_timesteps: 1_000  # also set by default in dm-control

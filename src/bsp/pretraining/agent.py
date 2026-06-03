@@ -8,10 +8,9 @@ from torch import nn, optim
 from torch.nn import functional as F
 from torch import distributions
 
-from bsp.common.utils import get_device
 from bsp.common.base_classes import BaseAgent
 from bsp.common.replay_buffer import ReplayBuffer
-from bsp.common.utils import _safe_histogram
+from bsp.common.utils import _safe_histogram, get_device
 from bsp.pretraining.nn_modules import CuriosityPolicyNet, CuriosityValueNet
 
 
@@ -150,8 +149,7 @@ class CuriosityAgent(BaseAgent):
 
         self.actor_optimizer.step()
 
-        # with torch.no_grad():
-        #     metrics['logstd'] = _safe_histogram(self.logstd, num_bins=128, min_range=1e-4)
+        # metrics['logstd'] = _safe_histogram(self.logstd, num_bins=128, min_range=1e-4)
 
         # Soft Update Target Networks
         _soft_update(self.critic_local, self.critic_target, self.cfg.critic.tau)

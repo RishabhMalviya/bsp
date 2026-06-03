@@ -15,7 +15,7 @@ eval_num_episodes: 5
 dpt_checkpoint_path: null
 
 replay_buffer:
-  capacity: 10_000
+  capacity: 100_000
 
 agent:
   gamma: 0.99
@@ -24,9 +24,11 @@ actor:
   actor_lr: 1e-4
   entropy_coef: 1e-4
   smoothness_coef: 1e-2
+  max_grad_norm: 1.0
 
 critic:
   hidden: 256
   depth: 2
   critic_lr: 1e-4
   tau: 1e-3
+  max_grad_norm: 1.0

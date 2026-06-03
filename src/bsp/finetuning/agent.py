@@ -12,7 +12,7 @@ from torch.nn import functional as F
 from torch import distributions
 from omegaconf import DictConfig
 
-from bsp.common.utils import get_device
+from bsp.common.utils import get_device, _safe_histogram
 from bsp.common.base_classes import BaseAgent
 from bsp.common.replay_buffer import ReplayBuffer
 from bsp.finetuning.nn_modules import BSPPolicyNet, TaskValueNet
@@ -160,6 +160,7 @@ class BSPAgent(BaseAgent):
 
         metrics = {}
 
+
         # Train Critic
         with torch.no_grad():
             next_action = self.act(obs_seq = next_obs_seq, action_seq = action_seq[:, 1:, :], deterministic=True)
@@ -168,7 +169,7 @@ class BSPAgent(BaseAgent):
 
         critic_pred = self.critic_local(torch.cat([obs, action], dim=-1)).squeeze(-1)
         critic_loss = F.mse_loss(critic_pred, td_target)
-        metrics[f'{self.downstream_task}_critic_loss'] = critic_loss.item()
+        metrics[f'critic_loss'] = critic_loss.item()
 
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
@@ -192,10 +193,14 @@ class BSPAgent(BaseAgent):
             + (self.tt.actor.smoothness_coef * smoothness_loss)
         )
 
-        metrics[f'{self.downstream_task}_actor_loss'] = actor_loss.item()
-        # metrics[f'{self.downstream_task}_actions_value_loss'] = actions_value_loss.item()
-        # metrics[f'{self.downstream_task}_actor_entropy'] = entropy_loss.item()
-        # metrics[f'{self.downstream_task}_actor_smoothness_loss'] = smoothness_loss.item()
+
+        metrics['actor_loss'] = actor_loss.item()
+        metrics['actions_value_loss'] = actions_value_loss.item()
+        metrics['actor_entropy'] = entropy_loss.item()
+        metrics['actor_smoothness_loss'] = smoothness_loss.item()
+        metrics['actions_dist'] = _safe_histogram(actions_sample, num_bins=128)
+        metrics['logstd'] = _safe_histogram(self.logstd, num_bins=128, min_range=1e-4)
+
 
         self.actor_optimizer.zero_grad()
         actor_loss.backward()

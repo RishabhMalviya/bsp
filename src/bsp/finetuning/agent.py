@@ -54,34 +54,51 @@ class BSPAgent(BaseAgent):
          )
 
         # Critic
-        self.critic_local = TaskValueNet(
+        self.critic_local_1 = TaskValueNet(
+            obs_dim, ac_dim, hidden=self.tt.critic.hidden, depth=self.tt.critic.depth
+        ).to(device)
+        self.critic_target_1 = TaskValueNet(
             obs_dim, ac_dim, hidden=self.tt.critic.hidden, depth=self.tt.critic.depth
         ).to(device)
 
-        self.critic_target = TaskValueNet(
+        self.critic_target_1.load_state_dict(self.critic_local_1.state_dict())
+        self.critic_target_1.eval()
+
+
+        self.critic_local_2 = TaskValueNet(
+            obs_dim, ac_dim, hidden=self.tt.critic.hidden, depth=self.tt.critic.depth
+        ).to(device)
+        self.critic_target_2 = TaskValueNet(
             obs_dim, ac_dim, hidden=self.tt.critic.hidden, depth=self.tt.critic.depth
         ).to(device)
 
-        self.critic_target.load_state_dict(self.critic_local.state_dict())
-        self.critic_target.eval()
+        self.critic_target_2.load_state_dict(self.critic_local_2.state_dict())
+        self.critic_target_2.eval()
+
 
         self.critic_optimizer = optim.Adam(
-            self.critic_local.parameters(),
+            itertools.chain(self.critic_local_1.parameters(), self.critic_local_2.parameters()),
             lr=self.tt.critic.critic_lr
         )
 
     def to_cpu(self):
+        self.critic_local_1.to('cpu')
+        self.critic_local_2.to('cpu')
+        self.critic_target_1.to('cpu')
+        self.critic_target_2.to('cpu')
+
         self.actor.to('cpu')
-        self.critic_local.to('cpu')
-        self.critic_target.to('cpu')
         self.logstd.data = self.logstd.data.to('cpu')  # In-place so the optimizer keeps referencing this Parameter
 
         self.device = 'cpu'
 
     def to_device(self):
+        self.critic_local_1.to(device)
+        self.critic_local_2.to(device)
+        self.critic_target_1.to(device)
+        self.critic_target_2.to(device)
+
         self.actor.to(device)
-        self.critic_local.to(device)
-        self.critic_target.to(device)
         self.logstd.data = self.logstd.data.to(device)
 
         self.device = device
@@ -104,7 +121,7 @@ class BSPAgent(BaseAgent):
         action_mean = self.actor(obs_seq, actions_seq)
 
         action_logstd = self.logstd.expand_as(action_mean)
-        clipped_logstd = torch.clamp(action_logstd, min=math.log(1e-5), max=math.log(2.0))
+        clipped_logstd = torch.clamp(action_logstd, min=math.log(1e-5), max=math.log(0.1))
         action_std = torch.exp(clipped_logstd) * float(temperature)
 
         return distributions.Normal(action_mean, action_std)
@@ -163,17 +180,22 @@ class BSPAgent(BaseAgent):
 
         # Train Critic
         with torch.no_grad():
-            next_action = self.act(obs_seq = next_obs_seq, action_seq = action_seq[:, 1:, :], deterministic=True)
-            next_q = self.critic_target(torch.cat([next_obs, next_action], dim=-1)).squeeze(-1)
+            next_action_mean = self.act(obs_seq = next_obs_seq, action_seq = action_seq[:, 1:, :], deterministic=True)
+            target_noise = (torch.randn_like(next_action_mean) * self.tt.critic.target_noise).clamp(-self.tt.critic.target_noise_clip, self.tt.critic.target_noise_clip)
+            next_action = (next_action_mean + target_noise).clamp(-1.0, 1.0)
+
+            next_q = torch.min(self.critic_target_1(torch.cat([next_obs, next_action], dim=-1)), self.critic_target_2(torch.cat([next_obs, next_action], dim=-1))).squeeze(-1)
+
             td_target = reward + self.tt.agent.gamma * (1 - done) * next_q
 
-        critic_pred = self.critic_local(torch.cat([obs, action], dim=-1)).squeeze(-1)
-        critic_loss = F.mse_loss(critic_pred, td_target)
+        critic_pred_1 = self.critic_local_1(torch.cat([obs, action], dim=-1)).squeeze(-1)
+        critic_pred_2 = self.critic_local_2(torch.cat([obs, action], dim=-1)).squeeze(-1)
+        critic_loss = F.mse_loss(critic_pred_1, td_target) + F.mse_loss(critic_pred_2, td_target)
         metrics[f'critic_loss'] = critic_loss.item()
 
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
-        critic_grad_norm = nn.utils.clip_grad_norm_(self.critic_local.parameters(), self.tt.critic.max_grad_norm)
+        critic_grad_norm = nn.utils.clip_grad_norm_(itertools.chain(self.critic_local_1.parameters(), self.critic_local_2.parameters()), self.tt.critic.max_grad_norm)
         metrics['critic_grad_norm'] = critic_grad_norm.item()
         self.critic_optimizer.step()
 
@@ -185,7 +207,7 @@ class BSPAgent(BaseAgent):
         next_actions_dist = self._get_action_distribution(next_obs_seq, action_seq[:, 1:, :])
         next_actions_sample = self._sample_action_from(next_actions_dist)
 
-        actions_value_loss = -self.critic_target(torch.cat([obs, actions_sample], dim=-1)).mean()
+        actions_value_loss = -torch.min(self.critic_local_1(torch.cat([obs, actions_sample], dim=-1)), self.critic_local_2(torch.cat([obs, actions_sample], dim=-1))).mean()
         entropy_loss = -actions_dist.entropy().sum(-1).mean()
         smoothness_loss = (actions_sample - next_actions_sample).pow(2).sum(-1).mean()  # L2 norm difference between consecutive actions
 
@@ -198,8 +220,8 @@ class BSPAgent(BaseAgent):
 
         metrics['actor_loss'] = actor_loss.item()
         metrics['actions_value_loss'] = actions_value_loss.item()
-        metrics['actor_entropy'] = entropy_loss.item()
-        metrics['actor_smoothness_loss'] = smoothness_loss.item()
+        metrics['actions_entropy'] = -entropy_loss.item()
+        metrics['actions_jitteriness'] = smoothness_loss.item()
         metrics['actions_dist'] = _safe_histogram(actions_sample, num_bins=128)
         metrics['logstd'] = _safe_histogram(self.logstd, num_bins=128, min_range=1e-4)
 
@@ -213,6 +235,7 @@ class BSPAgent(BaseAgent):
         self.actor_optimizer.step()
 
         # Soft Update Target Network
-        _soft_update(self.critic_local, self.critic_target, self.tt.critic.tau)
+        _soft_update(self.critic_local_1, self.critic_target_1, self.tt.critic.tau)
+        _soft_update(self.critic_local_2, self.critic_target_2, self.tt.critic.tau)
 
         return metrics

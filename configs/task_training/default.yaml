@@ -5,8 +5,8 @@ utd: 10
 batch_size: 512
 H_max: 16
 video_interval: 2_500      # in collected episodes
-ckpt_interval: 2_500      # in collected episodes
-eval_interval: 100      # in collected episodes
+ckpt_interval: 2_500       # in collected episodes
+eval_interval: 1           # in collected episodes
 eval_num_episodes: 5
 
 # Path to a pretrained `dynamics_transformer.pth` to warm-start the policy.
@@ -32,3 +32,5 @@ critic:
   critic_lr: 1e-4
   tau: 1e-3
   max_grad_norm: 1.0
+  target_noise: 0.1
+  target_noise_clip: 0.25

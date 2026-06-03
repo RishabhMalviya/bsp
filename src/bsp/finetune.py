@@ -23,13 +23,15 @@ def main(cfg: DictConfig) -> None:
     pretrain_run = cfg.get('pretrain_run') or '' # Can be overriden from CLI with `pretrain_run=<run_id>`
     ckpt_path = Path(cfg.log_dir) / 'checkpoints' / pretrain_run / 'dynamics_transformer.pth'
     if not ckpt_path.exists():
-        raise FileNotFoundError(f"""Checkpoint file not found at {ckpt_path}. Try running pretraining first, noting down the run ID, and then running this finetuning step with `pretrain_run=<run_id>`.""")
-    with open_dict(cfg):
-        cfg.task_training.dpt_checkpoint_path = str(ckpt_path)
+        print(f"""WARNING: Checkpoint file not found at {ckpt_path}. Training from scratch.""")
+        cfg.task_training.dpt_checkpoint_path = None
+    else:
+        with open_dict(cfg):
+            cfg.task_training.dpt_checkpoint_path = str(ckpt_path)
 
 
     # Setup Logger
-    if cfg.get('downstream_task') is not None:  # Can be overriden from CLI with `downstream_task=<task>`
+    if cfg.get('downstream_task') is not None:  # Top-level override from CLI with `downstream_task=<task>`
         with open_dict(cfg):
             cfg.env.downstream_task = cfg.downstream_task
     logger = Logger(cfg, name_prefix=cfg.env.downstream_task)

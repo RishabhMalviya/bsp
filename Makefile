@@ -39,7 +39,8 @@ finetune-test:  # Delete the run from wandb, and the artifact over-writes will b
 	  task_training.video_interval=4 \
 	  task_training.ckpt_interval=2 \
 	  task_training.utd=1 \
-	  task_training.batch_size=32
+	  task_training.batch_size=32 \
+	  wandb.mode=disabled
 
 # finetune-all: finetune-stand finetune-walk finetune-run
 

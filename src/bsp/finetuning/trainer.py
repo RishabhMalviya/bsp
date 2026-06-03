@@ -39,10 +39,6 @@ class TaskSpecificTrainer(BaseTrainer):
 
 		set_seed(cfg.seed)
 
-		# An explicit downstream_task argument overrides the configured one.
-		if downstream_task is not None:
-			with open_dict(cfg):
-				cfg.env.downstream_task = downstream_task
 		self.downstream_task = cfg.env.downstream_task
 
 		self.timestep = 0
@@ -60,7 +56,6 @@ class TaskSpecificTrainer(BaseTrainer):
 
 		self.agent = BSPAgent(cfg, obs_dim, ac_dim, downstream_task=self.downstream_task)
 		self._load_dpt_checkpoint(cfg.task_training.dpt_checkpoint_path)
-		self.obs_history = deque(maxlen=cfg.task_training.H_max)
 
 	def _eval(self) -> None:
 		"""Run deterministic eval episodes and log the average return."""
@@ -71,13 +66,16 @@ class TaskSpecificTrainer(BaseTrainer):
 
 		for episode in range(self.cfg.task_training.eval_num_episodes):
 			obs_history = deque(maxlen=self.cfg.task_training.H_max)
+			actions_history = deque(maxlen=self.cfg.task_training.H_max)
+
 			obs, _ = self.env.reset(seed=self.cfg.seed + episode)
 			episode_return = 0.0
 			done = False
 			while not done:
 				obs_history.append(obs)
 				with torch.no_grad():
-					action = self.agent.act(obs_history, deterministic=True).detach().cpu().numpy()
+					action = self.agent.act(obs_history, actions_history, deterministic=True).detach().cpu().numpy()
+				actions_history.append(action)
 				obs, reward, terminated, truncated, info = self.env.step(action)
 				
 				episode_return += float(reward)
@@ -92,19 +90,22 @@ class TaskSpecificTrainer(BaseTrainer):
 	
 	def _video(self) -> None:
 		"""
-			Run a single deterministic eval episode, log return and an RGB video.
+			Run a single deterministic eval episode, and log RGB video.
 		"""
 		self.agent.to_cpu()  # Run the eval episode on CPU to avoid GPU-CPU data transfer overhead
 		self.agent.actor.eval()  # Set the policy to eval mode (affects any dropout/batchnorm, though we don't use those in this implementation)
 
 		obs_history = deque(maxlen=self.cfg.task_training.H_max)
+		actions_history = deque(maxlen=self.cfg.task_training.H_max)
+
 		obs, _ = self.eval_env.reset(seed=self.cfg.seed)
 		frames = [self.eval_env.render()]
 		done = False
 		while not done:
 			obs_history.append(obs)
 			with torch.no_grad():
-				action = self.agent.act(obs_history, deterministic=True).detach().cpu().numpy()
+				action = self.agent.act(obs_history, actions_history, deterministic=True).detach().cpu().numpy()
+			actions_history.append(action)
 			obs, _, terminated, truncated, _ = self.eval_env.step(action)
 
 			frames.append(self.eval_env.render())  # pyright: ignore[reportCallIssue]
@@ -125,13 +126,15 @@ class TaskSpecificTrainer(BaseTrainer):
 		self.agent.to_cpu()  # Keep the agent on CPU during collection to avoid GPU-CPU data transfer overhead
 
 		for _ in range(self.cfg.task_training.num_collections_per_loop):
-			self.obs_history.clear()
+			obs_history = deque(maxlen=self.cfg.task_training.H_max)
+			actions_history = deque(maxlen=self.cfg.task_training.H_max)
 
 			obs, _ = self.env.reset(seed=self.cfg.seed)
 			for _ in range(self.cfg.task_training.max_episode_len):
-				self.obs_history.append(obs)
+				obs_history.append(obs)
 				with torch.no_grad():
-					action = self.agent.act(self.obs_history).detach().cpu().numpy()
+					action = self.agent.act(obs_history, actions_history).detach().cpu().numpy()
+				actions_history.append(action)
 				next_obs, reward, terminated, truncated, info = self.env.step(action)
 
 				self.agent.replay_buffer.add(obs, action, reward, next_obs, terminated or truncated)
@@ -149,10 +152,10 @@ class TaskSpecificTrainer(BaseTrainer):
 	def _prep_agent_training_batch(self):
 		"""Sample a length-L (L <= H_max) sequence batch and shape it for the agent.
 
-		The actor conditions on the full observation history, so we hand it the
-		sampled `obs` sequence (ending at s_t) and a one-step-shifted history
-		`next_obs_seq` (ending at s_{t+1}). The critic only needs the final
-		transition, so the action/reward/done are taken at the last step.
+		The actor conditions on the full observation history and action history, 
+		so we output the full obs_seq, action_seq, and next_obs_seq.
+
+		The reward and done are only needed for the update, so they are taken from the last step.
 		"""
 		L = sample_seq_length(self.H_max)
 
@@ -160,14 +163,11 @@ class TaskSpecificTrainer(BaseTrainer):
 			batch_size=self.cfg.task_training.batch_size, L=L
 		)
 
-		# History ending at s_{t+1}: drop the oldest state, append the final next state.
-		next_obs_seq = torch.cat([obs[:, 1:], next_obs[:, -1:]], dim=1)
-
 		return (
 			obs,                # obs_seq      (B, L, obs_dim)
-			actions[:, -1],     # action       (B, ac_dim)
+			actions,            # action_seq   (B, L, ac_dim)
 			rewards[:, -1],     # reward       (B,)
-			next_obs_seq,       # next_obs_seq (B, L, obs_dim)
+			next_obs,           # next_obs_seq (B, L, obs_dim)
 			dones[:, -1],       # done         (B,)
 		)
 

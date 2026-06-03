@@ -4,8 +4,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from bsp.common.nn_modules import DynamicsTransformer
-from bsp.common.nn_modules import MLP
+from bsp.common.nn_modules import DynamicsTransformer, MLP
 
 
 ############################################

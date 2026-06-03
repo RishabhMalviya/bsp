@@ -173,6 +173,8 @@ class BSPAgent(BaseAgent):
 
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
+        critic_grad_norm = nn.utils.clip_grad_norm_(self.critic_local.parameters(), self.tt.critic.max_grad_norm)
+        metrics['critic_grad_norm'] = critic_grad_norm.item()
         self.critic_optimizer.step()
 
 
@@ -204,6 +206,10 @@ class BSPAgent(BaseAgent):
 
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
+        actor_grad_norm = nn.utils.clip_grad_norm_(
+            itertools.chain([self.logstd], self.actor.parameters()), self.tt.actor.max_grad_norm
+        )
+        metrics['actor_grad_norm'] = actor_grad_norm.item()
         self.actor_optimizer.step()
 
         # Soft Update Target Network

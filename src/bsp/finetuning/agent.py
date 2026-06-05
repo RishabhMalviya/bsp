@@ -47,6 +47,8 @@ class BSPAgent(BaseAgent):
 
         self.logstd = nn.Parameter(torch.ones(ac_dim, dtype=torch.float32, device=device))
         nn.init.normal_(self.logstd, mean=-0.5, std=0.1)  # Initialize logstd to have a mean of -0.5 (std of ~0.6 in action space)
+        self.LOGSTD_MIN = math.log(1e-5)
+        self.LOGSTD_MAX = math.log(2.0)
 
         self.actor_optimizer = optim.Adam(
             itertools.chain([self.logstd], self.actor.parameters()),
@@ -121,7 +123,7 @@ class BSPAgent(BaseAgent):
         action_mean = self.actor(obs_seq, actions_seq)
 
         action_logstd = self.logstd.expand_as(action_mean)
-        clipped_logstd = torch.clamp(action_logstd, min=math.log(1e-5), max=math.log(0.1))
+        clipped_logstd = self.LOGSTD_MIN + 0.5 * (self.LOGSTD_MAX - self.LOGSTD_MIN) * (torch.tanh(action_logstd) + 1)
         action_std = torch.exp(clipped_logstd) * float(temperature)
 
         return distributions.Normal(action_mean, action_std)

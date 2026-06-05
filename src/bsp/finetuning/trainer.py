@@ -1,3 +1,4 @@
+import random
 from collections import deque
 from pathlib import Path
 
@@ -83,7 +84,7 @@ class TaskSpecificTrainer(BaseTrainer):
 			eval_returns.append(episode_return)
 
 		avg_return = sum(eval_returns) / len(eval_returns)
-		self.logger.log({f'{self.downstream_task} Eval Average Return': avg_return}, step=self.timestep)
+		self.logger.log({f'Eval Average Return': avg_return}, step=self.timestep)
 
 		self.agent.to_device()  # Move the agent back to the training device
 		self.agent.actor.train()  # Set the policy back to train mode
@@ -129,7 +130,7 @@ class TaskSpecificTrainer(BaseTrainer):
 			obs_history = deque(maxlen=self.cfg.task_training.H_max)
 			actions_history = deque(maxlen=self.cfg.task_training.H_max)
 
-			obs, _ = self.env.reset(seed=self.cfg.seed)
+			obs, _ = self.env.reset(seed=self.cfg.seed + random.randint(0, 10000))
 			for _ in range(self.cfg.task_training.max_episode_len):
 				obs_history.append(obs)
 				with torch.no_grad():

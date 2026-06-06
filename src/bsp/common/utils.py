@@ -9,6 +9,15 @@ from pathlib import Path
 
 import wandb
 import torch
+
+# MuJoCo's software-GL backend (osmesa/llvmpipe) and torch's lazily-imported
+# compile/triton stack both load their own LLVM runtime. If dm_control (pulled in
+# transitively by the shimmy import below) initializes osmesa before torch._dynamo
+# is imported, the two LLVM runtimes clash and the process segfaults (observed under
+# WSL). Importing torch's compile stack here -- before shimmy loads dm_control --
+# pins the safe ordering and is a cheap no-op once already imported.
+import torch._dynamo  # noqa: F401
+
 import numpy as np
 import gymnasium as gym
 from hydra.core.hydra_config import HydraConfig

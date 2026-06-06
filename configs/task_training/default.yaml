@@ -1,3 +1,8 @@
+# Which finetuning agent to train with:
+#   bsp     -> the hand-rolled BSPAgent (bsp.finetuning.trainer.TaskSpecificTrainer)
+#   sb3_sac -> the vendored stable_baselines3 SAC (bsp.finetuning.sb3_trainer.SB3SACTrainer)
+agent_type: sb3_sac
+
 total_num_episodes: 10_000
 max_episode_len: 1_000
 num_collections_per_loop: 1
@@ -34,3 +39,16 @@ critic:
   max_grad_norm: 1.0
   target_noise: 0.1
   target_noise_clip: 0.25
+
+# Settings for the stable_baselines3 SAC agent (agent_type: sb3_sac).
+sb3:
+  # Which block of src/bsp/stable_baselines3/sac/sac.yaml to pull hyperparameters
+  # from. `default` mirrors stable_baselines3' own defaults.
+  hparam_key: default
+  # Inline overrides applied on top of the selected sac.yaml block (e.g. n_timesteps,
+  # learning_starts) without editing the vendored yaml.
+  overrides: null
+  # Eval / video / checkpoint cadence, in environment timesteps.
+  eval_freq: 5_000
+  video_freq: 25_000
+  ckpt_freq: 25_000

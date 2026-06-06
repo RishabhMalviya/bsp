@@ -130,6 +130,8 @@ class TaskSpecificTrainer(BaseTrainer):
 			obs_history = deque(maxlen=self.cfg.task_training.H_max)
 			actions_history = deque(maxlen=self.cfg.task_training.H_max)
 
+			max_inactive_steps = 100
+			current_inactive = 0
 			obs, _ = self.env.reset(seed=self.cfg.seed + random.randint(0, 10000))
 			for _ in range(self.cfg.task_training.max_episode_len):
 				self.agent.observe(obs)  # Update running obs-normalization stats with on-policy data
@@ -138,6 +140,14 @@ class TaskSpecificTrainer(BaseTrainer):
 					action = self.agent.act(obs_history, actions_history).detach().cpu().numpy()
 				actions_history.append(action)
 				next_obs, reward, terminated, truncated, info = self.env.step(action)
+
+				if reward < 0.1: # pyright: ignore[reportOperatorIssue]
+					current_inactive += 1
+				else:
+					current_inactive = 0
+				if current_inactive >= max_inactive_steps:
+					truncated = True
+					print(f"Episode truncated due to inactivity after {max_inactive_steps} steps with reward < 0.1")
 
 				self.agent.replay_buffer.add(obs, action, reward, next_obs, terminated or truncated)
 

@@ -132,6 +132,7 @@ class TaskSpecificTrainer(BaseTrainer):
 
 			obs, _ = self.env.reset(seed=self.cfg.seed + random.randint(0, 10000))
 			for _ in range(self.cfg.task_training.max_episode_len):
+				self.agent.observe(obs)  # Update running obs-normalization stats with on-policy data
 				obs_history.append(obs)
 				with torch.no_grad():
 					action = self.agent.act(obs_history, actions_history).detach().cpu().numpy()
@@ -192,11 +193,30 @@ class TaskSpecificTrainer(BaseTrainer):
 		ckpt_path = ckpt_dir / f'dynamics_transformer_{self.downstream_task}.pth'
 		torch.save(dynamics_transformer.state_dict(), ckpt_path)
 
+	def _save_normalizer_checkpoint(self) -> None:
+		"""Persist the observation-normalizer running stats.
+
+		Saved to a separate file from the DynamicsTransformer weights so a consumer
+		of the finetuned policy can reconstruct the exact normalization applied during
+		training. No-op when observation normalization is disabled.
+		"""
+		if not self.agent.normalize_obs:
+			return
+
+		ckpt_dir = Path(self.cfg.log_dir) / 'checkpoints' / self.logger.run.id
+		ckpt_dir.mkdir(parents=True, exist_ok=True)
+		ckpt_path = ckpt_dir / f'obs_normalizer_{self.downstream_task}.pth'
+		torch.save(self.agent.normalizer.state_dict(), ckpt_path)
+
 	def _log_dpt_artifact_final(self):
 		ckpt_dir = Path(self.cfg.log_dir) / 'checkpoints' / self.logger.run.id
 		ckpt_path = ckpt_dir / f'dynamics_transformer_{self.downstream_task}.pth'
 
 		self.logger.log_artifact(ckpt_path, name=f'dynamics_transformer_{self.downstream_task}', type='model')
+
+		if self.agent.normalize_obs:
+			normalizer_path = ckpt_dir / f'obs_normalizer_{self.downstream_task}.pth'
+			self.logger.log_artifact(normalizer_path, name=f'obs_normalizer_{self.downstream_task}', type='model')
 
 	def train(self) -> None:
 		while self.collected_episodes < self.cfg.task_training.total_num_episodes:
@@ -219,5 +239,6 @@ class TaskSpecificTrainer(BaseTrainer):
 				self._video()
 			if self.collected_episodes % self.cfg.task_training.ckpt_interval == 0:
 				self._save_dpt_checkpoint()
+				self._save_normalizer_checkpoint()
 		
 		self._log_dpt_artifact_final()

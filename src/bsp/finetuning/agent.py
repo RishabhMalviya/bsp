@@ -242,11 +242,13 @@ class BSPAgent(BaseAgent):
         actions_value_loss = -torch.min(self.critic_local_1(torch.cat([obs, actions_sample], dim=-1)), self.critic_local_2(torch.cat([obs, actions_sample], dim=-1))).mean()
         entropy_loss = -actions_dist.entropy().sum(-1).mean()
         smoothness_loss = (actions_sample - next_actions_sample).pow(2).sum(-1).mean()  # L2 norm difference between consecutive actions
+        action_abs_loss = actions_sample.abs().sum(-1).mean()  # regularize absolute values of the actions
 
         actor_loss = (
             actions_value_loss
             + (self.tt.actor.entropy_coef * entropy_loss)
             + (self.tt.actor.smoothness_coef * smoothness_loss)
+            + (self.tt.actor.abs_action_coef * action_abs_loss)
         )
 
 
@@ -254,6 +256,7 @@ class BSPAgent(BaseAgent):
         metrics['actions_value_loss'] = actions_value_loss.item()
         metrics['actions_entropy'] = -entropy_loss.item()
         metrics['actions_jitteriness'] = smoothness_loss.item()
+        metrics['actions_abs'] = action_abs_loss.item()
         metrics['actions_dist'] = _safe_histogram(actions_sample, num_bins=128)
         metrics['logstd'] = _safe_histogram(self.logstd, num_bins=128, min_range=1e-4)
 

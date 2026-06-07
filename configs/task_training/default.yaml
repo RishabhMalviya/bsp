@@ -14,6 +14,10 @@ ckpt_interval: 2_500       # in collected episodes
 eval_interval: 1           # in collected episodes
 eval_num_episodes: 5
 
+# Normalize observations with running mean/std stats (updated from collected data)
+# before feeding them to the actor and critic.
+normalize_obs: true
+
 # Path to a pretrained `dynamics_transformer.pth` to warm-start the policy.
 # null trains the DynamicsTransformer from scratch. main.py sets this to the
 # checkpoint produced by the preceding pretraining run.
@@ -27,7 +31,7 @@ agent:
 
 actor:
   actor_lr: 1e-4
-  entropy_coef: 0
+  entropy_coef: 5e-2
   smoothness_coef: 1e-2
   max_grad_norm: 1.0
 

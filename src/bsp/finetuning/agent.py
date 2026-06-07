@@ -12,7 +12,7 @@ from torch.nn import functional as F
 from torch import distributions
 from omegaconf import DictConfig
 
-from bsp.common.utils import get_device, _safe_histogram
+from bsp.common.utils import get_device, _safe_histogram, Normalizer
 from bsp.common.base_classes import BaseAgent
 from bsp.common.replay_buffer import ReplayBuffer
 from bsp.finetuning.nn_modules import BSPPolicyNet, TaskValueNet
@@ -34,6 +34,12 @@ class BSPAgent(BaseAgent):
         self.tt = cfg.task_training
 
         self.replay_buffer = ReplayBuffer(obs_dim, ac_dim, self.tt.replay_buffer.capacity)
+
+        # Running observation normalizer. The replay buffer stores raw observations;
+        # normalization is applied at network-input time (actor and critic) using the
+        # current running statistics, so the stats can keep adapting during training.
+        self.normalize_obs = self.tt.normalize_obs
+        self.normalizer = Normalizer(obs_dim)
 
         # Actor: a BSPPolicyNet wrapping the (pretrained) DynamicsTransformer. The
         # transformer dims come from the shared `dp_transformer` config so the
@@ -105,6 +111,27 @@ class BSPAgent(BaseAgent):
 
         self.device = device
 
+    def observe(self, obs) -> None:
+        """Update the running observation statistics with a freshly collected obs.
+
+        Called during data collection only (not during eval), so the normalization
+        statistics reflect the on-policy data distribution.
+        """
+        if self.normalize_obs:
+            self.normalizer.observe(np.asarray(obs, dtype=np.float64))
+
+    def _normalize_obs(self, obs: torch.Tensor) -> torch.Tensor:
+        """Normalize observations with the running mean/std before feeding a network.
+
+        Broadcasts over the trailing obs_dim axis, so it works for both
+        (B, obs_dim) critic inputs and (B, L, obs_dim) actor sequences.
+        """
+        if not self.normalize_obs:
+            return obs
+        mean = torch.as_tensor(self.normalizer.mean, dtype=obs.dtype, device=obs.device)
+        std = torch.as_tensor(np.sqrt(self.normalizer.var), dtype=obs.dtype, device=obs.device)
+        return (obs - mean) / std
+
     def _history_deque_to_tensor(self, seq : deque, is_action_seq: bool = False) -> torch.Tensor:
         """Stack a deque of observations into a (1, L, obs_dim) sequence tensor."""
         if is_action_seq and len(seq) == 0:
@@ -120,7 +147,7 @@ class BSPAgent(BaseAgent):
         mask token) and the state slots are all left visible. The policy aggregates
         the sequence into a single (B, ac_dim) action mean.
         """
-        action_mean = self.actor(obs_seq, actions_seq)
+        action_mean = self.actor(self._normalize_obs(obs_seq), actions_seq)
 
         action_logstd = self.logstd.expand_as(action_mean)
         clipped_logstd = self.LOGSTD_MIN + 0.5 * (self.LOGSTD_MAX - self.LOGSTD_MIN) * (torch.tanh(action_logstd) + 1)
@@ -129,7 +156,7 @@ class BSPAgent(BaseAgent):
         return distributions.Normal(action_mean, action_std)
 
     def _sample_action_from(self, action_distribution: distributions.Distribution) -> torch.Tensor:
-        return torch.clamp(input=action_distribution.rsample(), min=-1.0, max=1.0)
+        return torch.tanh(action_distribution.rsample())
 
     def act(self, obs_seq: deque | torch.Tensor, action_seq: deque | torch.Tensor, deterministic: bool = False, temperature: float = 1.0) -> torch.Tensor:
         """
@@ -173,8 +200,11 @@ class BSPAgent(BaseAgent):
         obs_seq, action_seq, reward, next_obs_seq, done = batch
 
         action = action_seq[:, -1, :]      # action taken at s_t (B, ac_dim)
-        obs = obs_seq[:, -1, :]            # current state s_{t} (B, obs_dim)
-        next_obs = next_obs_seq[:, -1, :]  # next state s_{t+1}  (B, obs_dim)
+        # Critic inputs are normalized with the running stats. The actor normalizes
+        # its full obs_seq / next_obs_seq internally (see _get_action_distribution),
+        # so the whole agent operates in a consistent normalized observation space.
+        obs = self._normalize_obs(obs_seq[:, -1, :])            # current state s_{t} (B, obs_dim)
+        next_obs = self._normalize_obs(next_obs_seq[:, -1, :])  # next state s_{t+1}  (B, obs_dim)
 
 
         metrics = {}

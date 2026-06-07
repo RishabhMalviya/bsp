@@ -1,11 +1,11 @@
-total_num_episodes: 10_000
+total_num_episodes: 2_000
 num_collections_per_loop: 1
 dynamics_predictor_utd: 100
 curiosity_agent_utd: 10
 H_max: 16
 length_bias_k: 4.0
-video_interval: 2_500  # episodes
-ckpt_interval: 2_500  # episodes
+video_interval: 1_000  # episodes
+ckpt_interval: 1_000  # episodes
 
 dp_transformer:
   # Architecture (model) params now live in the shared `dp_transformer` config group.
@@ -24,8 +24,8 @@ curiosity_agent:
     hidden: 64
     depth: 2
     lr: 1e-4
-    entropy_coef: 5e-3
-    smoothness_coef: 1e-2             # final L2 penalty coef on the predicted action (control signal)
+    entropy_coef: 5e-2
+    smoothness_coef: 5e-2             # final L2 penalty coef on the predicted action (control signal)
     smoothness_ramp_episodes: 10_000  # episodes to ramp smoothness_coef 0 -> final (set = total_num_episodes)
   critic:
     hidden: 64

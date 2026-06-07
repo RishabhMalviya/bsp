@@ -49,6 +49,7 @@ class TaskSpecificTrainer(BaseTrainer):
 		# Need at least one batch's worth of length-H_max windows before training;
 		# the +H_max headroom accounts for windows lost to episode boundaries.
 		self.warmup = cfg.task_training.batch_size + self.H_max
+		print(f'Warmup period: {self.warmup}')
 
 		self.env = make_env(cfg.env.domain, self.downstream_task, cfg.env.max_episode_timesteps, seed=cfg.seed)
 		obs_dim = gym.spaces.flatdim(self.env.observation_space)
@@ -130,13 +131,31 @@ class TaskSpecificTrainer(BaseTrainer):
 			obs_history = deque(maxlen=self.cfg.task_training.H_max)
 			actions_history = deque(maxlen=self.cfg.task_training.H_max)
 
+			max_inactive_steps = 100
+			current_inactive = 0
 			obs, _ = self.env.reset(seed=self.cfg.seed + random.randint(0, 10000))
 			for _ in range(self.cfg.task_training.max_episode_len):
+				self.agent.observe(obs)  # Update running obs-normalization stats with on-policy data
 				obs_history.append(obs)
 				with torch.no_grad():
 					action = self.agent.act(obs_history, actions_history).detach().cpu().numpy()
 				actions_history.append(action)
 				next_obs, reward, terminated, truncated, info = self.env.step(action)
+
+				state_change = np.linalg.norm(obs - next_obs)
+				action_sum=np.sum(action)
+				self.logger.log({
+					'collection__state_change': state_change,
+					'collection__action_sum': action_sum,
+					'collection__reward': reward,
+				}, step=self.timestep)
+				if (state_change < 1e-3 or action_sum > 0.95 or action_sum < -0.95) and reward < 1e-3:  # pyright: ignore[reportOperatorIssue]
+					current_inactive += 1
+				else:
+					current_inactive = 0
+				if current_inactive >= max_inactive_steps:
+					truncated = True
+					print(f"Episode truncated due to continuous inactivity of {max_inactive_steps} steps.")
 
 				self.agent.replay_buffer.add(obs, action, reward, next_obs, terminated or truncated)
 
@@ -192,11 +211,30 @@ class TaskSpecificTrainer(BaseTrainer):
 		ckpt_path = ckpt_dir / f'dynamics_transformer_{self.downstream_task}.pth'
 		torch.save(dynamics_transformer.state_dict(), ckpt_path)
 
+	def _save_normalizer_checkpoint(self) -> None:
+		"""Persist the observation-normalizer running stats.
+
+		Saved to a separate file from the DynamicsTransformer weights so a consumer
+		of the finetuned policy can reconstruct the exact normalization applied during
+		training. No-op when observation normalization is disabled.
+		"""
+		if not self.agent.normalize_obs:
+			return
+
+		ckpt_dir = Path(self.cfg.log_dir) / 'checkpoints' / self.logger.run.id
+		ckpt_dir.mkdir(parents=True, exist_ok=True)
+		ckpt_path = ckpt_dir / f'obs_normalizer_{self.downstream_task}.pth'
+		torch.save(self.agent.normalizer.state_dict(), ckpt_path)
+
 	def _log_dpt_artifact_final(self):
 		ckpt_dir = Path(self.cfg.log_dir) / 'checkpoints' / self.logger.run.id
 		ckpt_path = ckpt_dir / f'dynamics_transformer_{self.downstream_task}.pth'
 
 		self.logger.log_artifact(ckpt_path, name=f'dynamics_transformer_{self.downstream_task}', type='model')
+
+		if self.agent.normalize_obs:
+			normalizer_path = ckpt_dir / f'obs_normalizer_{self.downstream_task}.pth'
+			self.logger.log_artifact(normalizer_path, name=f'obs_normalizer_{self.downstream_task}', type='model')
 
 	def train(self) -> None:
 		while self.collected_episodes < self.cfg.task_training.total_num_episodes:
@@ -204,13 +242,11 @@ class TaskSpecificTrainer(BaseTrainer):
 			with self.logger.timer('time/collect_s', step=lambda: self.timestep):
 				self._collect_episodes()
 
-			# Skip training until the replay buffer holds enough length-H_max windows
-			if self.agent.replay_buffer.size < self.warmup:
-				continue
-
 			# Train Agent
-			with self.logger.timer('time/agent_train_s', step=lambda: self.timestep):
-				self._train_agent()
+			if self.agent.replay_buffer.size >= self.warmup:
+				print(f" In training: collected {self.collected_episodes} episodes; with {self.agent.replay_buffer.size} transitions in the replay buffer.")
+				with self.logger.timer('time/agent_train_s', step=lambda: self.timestep):
+					self._train_agent()
 
 			# Eval and Checkpointing
 			if self.collected_episodes % self.cfg.task_training.eval_interval == 0:
@@ -219,5 +255,6 @@ class TaskSpecificTrainer(BaseTrainer):
 				self._video()
 			if self.collected_episodes % self.cfg.task_training.ckpt_interval == 0:
 				self._save_dpt_checkpoint()
+				self._save_normalizer_checkpoint()
 		
 		self._log_dpt_artifact_final()

@@ -156,7 +156,7 @@ class BSPAgent(BaseAgent):
         return distributions.Normal(action_mean, action_std)
 
     def _sample_action_from(self, action_distribution: distributions.Distribution) -> torch.Tensor:
-        return torch.clamp(input=action_distribution.rsample(), min=-1.0, max=1.0)
+        return torch.tanh(action_distribution.rsample())
 
     def act(self, obs_seq: deque | torch.Tensor, action_seq: deque | torch.Tensor, deterministic: bool = False, temperature: float = 1.0) -> torch.Tensor:
         """

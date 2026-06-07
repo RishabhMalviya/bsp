@@ -1,6 +1,6 @@
 defaults:
   - wandb: default
-  - env: humanoid
+  - env: walker
   - dp_transformer: default
   - curiosity_pre_training: default
   - task_training: default

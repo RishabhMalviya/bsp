@@ -49,6 +49,7 @@ class TaskSpecificTrainer(BaseTrainer):
 		# Need at least one batch's worth of length-H_max windows before training;
 		# the +H_max headroom accounts for windows lost to episode boundaries.
 		self.warmup = cfg.task_training.batch_size + self.H_max
+		print(f'Warmup period: {self.warmup}')
 
 		self.env = make_env(cfg.env.domain, self.downstream_task, cfg.env.max_episode_timesteps, seed=cfg.seed)
 		obs_dim = gym.spaces.flatdim(self.env.observation_space)
@@ -141,13 +142,20 @@ class TaskSpecificTrainer(BaseTrainer):
 				actions_history.append(action)
 				next_obs, reward, terminated, truncated, info = self.env.step(action)
 
-				if reward < 0.1: # pyright: ignore[reportOperatorIssue]
+				state_change = np.linalg.norm(obs - next_obs)
+				action_sum=np.sum(action)
+				self.logger.log({
+					'collection__state_change': state_change,
+					'collection__action_sum': action_sum,
+					'collection__reward': reward,
+				}, step=self.timestep)
+				if (state_change < 1e-3 or action_sum > 0.95 or action_sum < -0.95) and reward < 1e-3:  # pyright: ignore[reportOperatorIssue]
 					current_inactive += 1
 				else:
 					current_inactive = 0
 				if current_inactive >= max_inactive_steps:
 					truncated = True
-					print(f"Episode truncated due to inactivity after {max_inactive_steps} steps with reward < 0.1")
+					print(f"Episode truncated due to continuous inactivity of {max_inactive_steps} steps.")
 
 				self.agent.replay_buffer.add(obs, action, reward, next_obs, terminated or truncated)
 
@@ -234,13 +242,11 @@ class TaskSpecificTrainer(BaseTrainer):
 			with self.logger.timer('time/collect_s', step=lambda: self.timestep):
 				self._collect_episodes()
 
-			# Skip training until the replay buffer holds enough length-H_max windows
-			if self.agent.replay_buffer.size < self.warmup:
-				continue
-
 			# Train Agent
-			with self.logger.timer('time/agent_train_s', step=lambda: self.timestep):
-				self._train_agent()
+			if self.agent.replay_buffer.size >= self.warmup:
+				print(f" In training: collected {self.collected_episodes} episodes; with {self.agent.replay_buffer.size} transitions in the replay buffer.")
+				with self.logger.timer('time/agent_train_s', step=lambda: self.timestep):
+					self._train_agent()
 
 			# Eval and Checkpointing
 			if self.collected_episodes % self.cfg.task_training.eval_interval == 0:

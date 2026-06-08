@@ -13,6 +13,7 @@ from omegaconf import DictConfig, open_dict
 from bsp.common.utils import Logger, set_seed
 from bsp.finetuning.trainer import TaskSpecificTrainer
 from bsp.finetuning.sb3_trainer import SB3SACTrainer
+from bsp.finetuning.sb3_ppo_trainer import SB3PPOTrainer
 
 
 @hydra.main(version_base=None, config_path="../../configs", config_name="config")
@@ -42,6 +43,8 @@ def main(cfg: DictConfig) -> None:
         agent_type = cfg.task_training.get('agent_type', 'bsp')
         if agent_type == 'sb3_sac':
             finetuner = SB3SACTrainer(cfg, logger)
+        elif agent_type == 'sb3_ppo':
+            finetuner = SB3PPOTrainer(cfg, logger)
         else:
             finetuner = TaskSpecificTrainer(cfg, logger)
         finetuner.train()

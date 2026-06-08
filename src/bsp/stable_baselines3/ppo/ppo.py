@@ -238,7 +238,7 @@ class PPO(OnPolicyAlgorithm):
                     # Clip the difference between old and new value
                     # NOTE: this depends on the reward scaling
                     values_pred = rollout_data.old_values + th.clamp(
-                        values - rollout_data.old_values, -clip_range_vf, clip_range_vf
+                        values - rollout_data.old_values, -clip_range_vf, clip_range_vf  # pyright: ignore[reportOperatorIssue]
                     )
                 # Value loss using the TD(gae_lambda) target
                 value_loss = F.mse_loss(rollout_data.returns, values_pred)

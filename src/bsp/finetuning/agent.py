@@ -217,18 +217,19 @@ class BSPAgent(BaseAgent):
             next_action = (next_action_mean + target_noise).clamp(-1.0, 1.0)
 
             next_q = torch.min(self.critic_target_1(torch.cat([next_obs, next_action], dim=-1)), self.critic_target_2(torch.cat([next_obs, next_action], dim=-1))).squeeze(-1)
+            metrics['train/target_q_values_mean'] = next_q.mean().item()
 
             td_target = reward + self.tt.agent.gamma * (1 - done) * next_q
 
         critic_pred_1 = self.critic_local_1(torch.cat([obs, action], dim=-1)).squeeze(-1)
         critic_pred_2 = self.critic_local_2(torch.cat([obs, action], dim=-1)).squeeze(-1)
         critic_loss = F.mse_loss(critic_pred_1, td_target) + F.mse_loss(critic_pred_2, td_target)
-        metrics[f'critic_loss'] = critic_loss.item()
+        metrics[f'train/critic_loss'] = critic_loss.item()
 
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
         critic_grad_norm = nn.utils.clip_grad_norm_(itertools.chain(self.critic_local_1.parameters(), self.critic_local_2.parameters()), self.tt.critic.max_grad_norm)
-        metrics['critic_grad_norm'] = critic_grad_norm.item()
+        metrics['train/critic_grad_norm'] = critic_grad_norm.item()
         self.critic_optimizer.step()
 
 
@@ -252,13 +253,13 @@ class BSPAgent(BaseAgent):
         )
 
 
-        metrics['actor_loss'] = actor_loss.item()
-        metrics['actions_value_loss'] = actions_value_loss.item()
-        metrics['actions_entropy'] = -entropy_loss.item()
-        metrics['actions_jitteriness'] = smoothness_loss.item()
-        metrics['actions_abs'] = action_abs_loss.item()
-        metrics['actions_dist'] = _safe_histogram(actions_sample, num_bins=128)
-        metrics['logstd'] = _safe_histogram(self.logstd, num_bins=128, min_range=1e-4)
+        metrics['train/actor_loss'] = actor_loss.item()
+        metrics['train/actions_value_loss'] = actions_value_loss.item()
+        metrics['train/actions_entropy'] = -entropy_loss.item()
+        metrics['train/actions_jitteriness'] = smoothness_loss.item()
+        metrics['train/actions_abs'] = action_abs_loss.item()
+        metrics['train/actions_dist'] = _safe_histogram(actions_sample, num_bins=128)
+        metrics['train/logstd'] = _safe_histogram(self.logstd, num_bins=128, min_range=1e-4)
 
 
         self.actor_optimizer.zero_grad()
@@ -266,7 +267,7 @@ class BSPAgent(BaseAgent):
         actor_grad_norm = nn.utils.clip_grad_norm_(
             itertools.chain([self.logstd], self.actor.parameters()), self.tt.actor.max_grad_norm
         )
-        metrics['actor_grad_norm'] = actor_grad_norm.item()
+        metrics['train/actor_grad_norm'] = actor_grad_norm.item()
         self.actor_optimizer.step()
 
         # Soft Update Target Network

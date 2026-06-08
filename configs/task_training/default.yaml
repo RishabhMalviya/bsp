@@ -1,7 +1,7 @@
 # Which finetuning agent to train with:
 #   bsp     -> the hand-rolled BSPAgent (bsp.finetuning.trainer.TaskSpecificTrainer)
 #   sb3_sac -> the vendored stable_baselines3 SAC (bsp.finetuning.sb3_trainer.SB3SACTrainer)
-agent_type: sb3_sac
+agent_type: sb3_ppo
 
 total_num_episodes: 10_000
 max_episode_len: 1_000

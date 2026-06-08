@@ -145,9 +145,9 @@ class TaskSpecificTrainer(BaseTrainer):
 				state_change = np.linalg.norm(obs - next_obs)
 				action_sum=np.sum(action)
 				self.logger.log({
-					'collection__state_change': state_change,
-					'collection__action_sum': action_sum,
-					'collection__reward': reward,
+					'collection/state_change': state_change,
+					'collection/action_sum': action_sum,
+					'collection/reward': reward,
 				}, step=self.timestep)
 				if (state_change < 1e-3 or action_sum > 0.95 or action_sum < -0.95) and reward < 1e-3:  # pyright: ignore[reportOperatorIssue]
 					current_inactive += 1

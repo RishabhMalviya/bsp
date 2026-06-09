@@ -5,7 +5,7 @@ default:
 BipedalWalker-v3:
   normalize: true
   n_envs: 32
-  n_timesteps: !!float 5e6
+  n_timesteps: !!float 1e7
   policy: 'MlpPolicy'
   n_steps: 2048
   batch_size: 64

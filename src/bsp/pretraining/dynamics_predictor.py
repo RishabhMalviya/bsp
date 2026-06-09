@@ -66,6 +66,45 @@ class DynamicsPredictor():
 
         return rewards
 
+    def compute_intrinsic_reward_step(self, states, actions, next_state) -> float:
+        """Online, single-transition intrinsic reward.
+
+        On-policy algorithms (e.g. PPO) need the reward assigned at collection
+        time, one transition at a time, rather than recomputed from sampled
+        sequences. This is the single-transition analogue of the *last row* of
+        :meth:`compute_intrinsic_reward`: given the in-episode prefix states
+        ``s_0..s_l`` and actions ``a_0..a_l`` (``T`` steps) plus the resulting
+        next state ``s_{l+1}``, return the MSE of predicting ``s_{l+1}`` from the
+        causal prefix.
+
+        Masking convention matches :meth:`compute_intrinsic_reward` exactly: the
+        sequence is extended by the target state, the trailing action is padded
+        (and masked by the module), and only the final position is masked so the
+        prefix ``0..l`` stays visible. Caller must ensure ``T + 1 <= H_max``.
+        """
+        module_device = next(self.dynamics_predictor_module.parameters()).device
+        states_t = torch.as_tensor(states, dtype=torch.float32, device=module_device)
+        actions_t = torch.as_tensor(actions, dtype=torch.float32, device=module_device)
+        next_state_t = torch.as_tensor(next_state, dtype=torch.float32, device=module_device)
+
+        T = states_t.shape[0]
+
+        states_full = torch.cat([states_t, next_state_t.unsqueeze(0)], dim=0).unsqueeze(0)  # (1, T+1, obs)
+        ac_pad = torch.zeros(1, actions_t.shape[-1], dtype=torch.float32, device=module_device)
+        actions_full = torch.cat([actions_t, ac_pad], dim=0).unsqueeze(0)  # (1, T+1, ac)
+
+        # Causal mask: only the final position (the target s_{l+1}) is hidden;
+        # positions 0..T-1 stay visible.
+        positions = torch.arange(T + 1, device=module_device)
+        mask = (positions > (T - 1)).unsqueeze(0)  # (1, T+1)
+
+        with torch.no_grad():
+            pred_states, _ = self.dynamics_predictor_module(states_full, actions_full, mask, mask)
+            pred_next = pred_states[0, T]
+            reward = ((pred_next - next_state_t) ** 2).mean()
+
+        return float(reward.item())
+
     def _sample_mlm_masks(self, B, L, device):
         n = max(1, L // 4)
         sm = torch.zeros(B, L, dtype=torch.bool, device=device)

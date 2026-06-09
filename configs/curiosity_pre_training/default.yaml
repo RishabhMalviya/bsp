@@ -1,3 +1,8 @@
+# Which RL agent drives pretraining collection/updates:
+#   sb3_ppo -> vendored stable_baselines3 PPO (bsp.pretraining.sb3_ppo_trainer)
+#   bsp     -> hand-rolled CuriosityAgent     (bsp.pretraining.trainer)
+agent_type: sb3_ppo
+
 total_num_episodes: 2_000
 num_collections_per_loop: 1
 dynamics_predictor_utd: 100
@@ -6,6 +11,27 @@ H_max: 16
 length_bias_k: 4.0
 video_interval: 1_000  # episodes
 ckpt_interval: 1_000  # episodes
+
+# Deterministic eval episodes (downstream task, extrinsic reward) per eval.
+eval_num_episodes: 2
+
+# stable_baselines3 PPO hyperparameters for `agent_type: sb3_ppo`. `overrides`
+# win over the matching block (`hparam_key`) in stable_baselines3/ppo/ppo.yaml.
+sb3:
+  hparam_key: default
+  eval_freq: 25_000    # timesteps
+  video_freq: 50_000   # timesteps
+  ckpt_freq: 25_000    # timesteps
+  overrides:
+    n_timesteps: 2.0e6
+    n_steps: 2048
+    batch_size: 64
+    n_epochs: 10
+    gamma: 0.99
+    gae_lambda: 0.95
+    ent_coef: 0.0
+    learning_rate: 3.0e-4
+    policy_kwargs: "dict(net_arch=[64, 64])"
 
 dp_transformer:
   # Architecture (model) params now live in the shared `dp_transformer` config group.

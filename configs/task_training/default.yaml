@@ -45,15 +45,25 @@ critic:
   target_noise: 0.1
   target_noise_clip: 0.25
 
-# Settings for the stable_baselines3 SAC agent (agent_type: sb3_sac).
+# Use a BSPPolicyNet (DynamicsTransformer + action head) as the PPO actor instead
+# of the default MlpPolicy (agent_type: sb3_ppo). The transformer architecture is
+# taken from the shared `dp_transformer` config (so it matches the pretraining
+# checkpoint) and `H_max` above. When `dynamics_transformer_ckpt` is null, the
+# warm-start falls back to `dpt_checkpoint_path` (set by finetune.py from the
+# preceding pretrain run); set `enabled: false` to keep the plain MlpPolicy actor.
+bsp_actor:
+  enabled: true
+  dynamics_transformer_ckpt: null
+
+# Settings for the stable_baselines3 agents (agent_type: sb3_sac or sb3_ppo).
 sb3:
-  # Which block of src/bsp/stable_baselines3/sac/sac.yaml to pull hyperparameters
+  # Which block of the algorithm's YAML (found in src/bsp/stable_baselines3) to pull hyperparameters
   # from. `default` mirrors stable_baselines3' own defaults.
-  hparam_key: default
-  # Inline overrides applied on top of the selected sac.yaml block (e.g. n_timesteps,
+  hparam_key: BipedalWalker-v3
+  # Inline overrides applied on top of the selected block (e.g. n_timesteps,
   # learning_starts) without editing the vendored yaml.
   overrides: null
   # Eval / video / checkpoint cadence, in environment timesteps.
   eval_freq: 5_000
-  video_freq: 25_000
-  ckpt_freq: 25_000
+  video_freq: 2_500_000
+  ckpt_freq: 2_500_000
